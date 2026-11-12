@@ -1,0 +1,22 @@
+{
+  "id": "neodex.potager",
+  "name": "Potager",
+  "version": "1.0.0",
+  "author": "NDesumeur",
+  "description": "Jeu de défense en pixel art : sur 5 rangées de potager, plante trèfles, radis, choux, orties et piments pour arrêter limaces, escargots, corbeaux, taupes et sangliers avant qu'ils atteignent la maison. Des graines à ramasser, une grande vague à chaque niveau, un chat par rangée en dernier recours, 10 niveaux de plus en plus durs.",
+  "icon": "icon.png",
+  "entry": "index.js",
+  "view": "potager",
+  "neobase": ">=4.0.0",
+  "type": "app",
+  "category": "Jeux",
+  "syncMode": "progression",
+  "syncInfo": "Record.",
+  "mobile": false,
+  "system": false,
+  "dependencies": {},
+  "sdk": "2.1.0",
+  "permissions": [
+    "storage"
+  ]
+}
