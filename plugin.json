@@ -1,9 +1,9 @@
 {
   "id": "neodex.potager",
   "name": "Potager",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "NDesumeur",
-  "description": "Jeu de défense en pixel art : sur 5 rangées de potager, plante trèfles, radis, choux, orties et piments pour arrêter limaces, escargots, corbeaux, taupes et sangliers avant qu'ils atteignent la maison. Des graines à ramasser, une grande vague à chaque niveau, un chat par rangée en dernier recours, 10 niveaux de plus en plus durs.",
+  "description": "Jeu de défense en pixel art : sur 5 rangées de potager, plante trèfles, radis, choux, orties et piments pour arrêter limaces, escargots, corbeaux, taupes et sangliers avant qu'ils atteignent la maison. Des graines à ramasser, une grande vague à chaque niveau, un chat par rangée en dernier recours, 20 niveaux de plus en plus durs : l'été, puis l'automne et l'hiver. Tournesol et citrouille en plus, jardin fleuri, plein écran et jeu à la taille de l'écran.",
   "icon": "icon.png",
   "entry": "index.js",
   "view": "potager",

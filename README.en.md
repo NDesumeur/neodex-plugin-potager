@@ -7,7 +7,7 @@ A pixel art defense game: on 5 rows of vegetable patch, vegetables stop the pest
 ## Controls
 
 - **Mouse**: click a plant at the top, then a square in the garden. Click seeds to pick them up.
-- **Keyboard**: **1 to 5** to pick the plant, **arrows** for the square, **Enter** to plant, **C** to pick up a seed, **X** for the shovel.
+- **Keyboard**: **1 to 7** to pick the plant, **arrows** for the square, **Enter** to plant, **C** to pick up a seed, **X** for the shovel.
 - **P** or **Esc**: pause.
 
 ## The plants
@@ -19,6 +19,20 @@ A pixel art defense game: on 5 rows of vegetable patch, vegetables stop the pest
 - **Chili** (100, level 4): shoots fireballs that hurt a lot.
 
 Each plant has a waiting time before you can plant another one. The **shovel** removes a plant.
+
+## Seasons
+
+Levels 1 to 10 are played in summer, in a garden in bloom. Levels 11 to 15 are played in autumn (dead leaves, mushrooms, falling leaves) and levels 16 to 20 in winter (snow, frost, snowflakes). The waves keep growing. If you had already finished level 10, you go straight on to level 11.
+
+Two plants arrive with autumn:
+- **Sunflower** (key 6, 50 seeds, from level 11): it gives a big seed worth 50 every 12 seconds.
+- **Pumpkin** (key 7, 125 seeds, from level 13): a wall much sturdier than the cabbage.
+
+The shovel is now on **X** or **0**.
+
+## Full screen
+
+The **Full screen** button fills the whole screen with the garden (Escape to leave). Otherwise the game takes all the height the window leaves.
 
 ## The pests
 

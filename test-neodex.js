@@ -1,5 +1,5 @@
 // lancé par le test « local » de NeoDex : plante au clavier (un trèfle, puis des radis devant les nuisibles, comme un lecteur d'écran le ferait),
-// ramasse les graines et vérifie que des nuisibles sont vaincus (avec NEO_SHOTS : garde des images du jeu, sans la teinte du thème)
+// ramasse les graines et vérifie que des nuisibles sont vaincus ; puis l'automne et l'hiver avec le tournesol et la citrouille, le plein écran et la place prise (avec NEO_SHOTS : garde des images du jeu, sans la teinte du thème)
 module.exports = async ({ pj, sleep }) => {
   const key = k => pj(`document.dispatchEvent(new KeyboardEvent('keydown', {key: '${k}', bubbles: true})), 0`);
   const label = () => pj(`document.getElementById('pgCanvas').getAttribute('aria-label')`);
@@ -23,5 +23,30 @@ module.exports = async ({ pj, sleep }) => {
   await shot('2-combat');
   const k = /(\d+) plantes, (\d+) nuisibles, (\d+) vaincus/.exec(l = await label());
   if (!k || +k[1] < 4 || +k[3] < 1) throw new Error('il fallait planter et vaincre des nuisibles : « ' + l + ' »');
-  return l;
+  // l'automne et l'hiver : un tournesol (touche 6) et une citrouille (touche 7) plantés au clavier, le tournesol donne une grosse graine de 50
+  await pj(`window.__e = []; addEventListener('error', e => __e.push(e.message)); 0`);
+  const C = code => pj(`(() => { const T = document.getElementById('pgCanvas').__pg; ${code} })()`);
+  const seasons = [];
+  for (const L of [14, 18]) {
+    await C(`T.nw(${L}); return 0;`); await sleep(300); if (L === 18) await shot('3-hiver-depart');
+    await key(' '); await C(`T.st().money = 400; T.st().cur = [1, 2]; return 0;`); cur = [1, 2];
+    await plant(6, 0, 2); await plant(7, 5, 2); await plant(2, 1, 2);
+    const got = await C(`const pg = T.st(); return pg.plants.map(p => p.k).sort().join(',');`);
+    if (got !== 'citrouille,radis,tournesol') throw new Error('niveau ' + L + ' : plantes posées ' + got);
+    const m0 = await C(`return T.st().money;`);
+    await sleep(4500); await key('c'); await key('c'); await sleep(200);
+    const m1 = await C(`return T.st().money;`);
+    if (m1 - m0 < 50) throw new Error('le tournesol ne donne pas sa graine (' + m0 + ' → ' + m1 + ')');
+    seasons.push(/niveau \d+ : \d+ graines, (\w+)/.exec(await label())[1]);
+    await shot(L === 14 ? '4-automne' : '5-hiver');
+  }
+  if (seasons.join() !== 'automne,hiver') throw new Error('saisons : ' + seasons);
+  const errs = await pj(`window.__e.join(' | ')`); if (errs) throw new Error('erreur : ' + errs);
+  await pj(`document.getElementById('pgFs').click(), 0`); await sleep(700);
+  const fs = await pj(`(() => { const c = document.getElementById('pgCanvas'), r = c.getBoundingClientRect(); return document.fullscreenElement === c.parentElement && (Math.abs(r.height - innerHeight) < 3 || Math.abs(r.width - innerWidth) < 3); })()`);
+  await pj(`document.fullscreenElement && document.exitFullscreen(), 0`); await sleep(300);
+  if (!fs) throw new Error('le plein écran ne remplit pas l\'écran');
+  const L = await pj(`(() => { const r = document.getElementById('pgCanvas').getBoundingClientRect(); let s = 0; for (let e = document.getElementById('pgCanvas').parentElement; e; e = e.parentElement) s += e.scrollTop; return { bottom: Math.round(r.bottom + s), h: Math.round(r.height), wh: innerHeight, ww: innerWidth, sw: document.documentElement.scrollWidth }; })()`);
+  if (L.bottom > L.wh + 1 || L.sw > L.ww + 1 || L.h < 300) throw new Error('le jeu dépasse la fenêtre ou reste petit : ' + JSON.stringify(L));
+  return l + ' · automne et hiver, tournesol et citrouille · plein écran · ' + L.h + ' px dans ' + L.ww + '×' + L.wh;
 };

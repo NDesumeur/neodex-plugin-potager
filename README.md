@@ -7,7 +7,7 @@ Un jeu de défense en pixel art : sur 5 rangées de potager, des légumes arrêt
 ## Commandes
 
 - **Souris** : clique sur une plante en haut, puis sur une case du jardin. Clique sur les graines pour les ramasser.
-- **Clavier** : **1 à 5** pour choisir la plante, **flèches** pour la case, **Entrée** pour planter, **C** pour ramasser une graine, **X** pour la pelle.
+- **Clavier** : **1 à 7** pour choisir la plante, **flèches** pour la case, **Entrée** pour planter, **C** pour ramasser une graine, **X** pour la pelle.
 - **P** ou **Échap** : pause.
 
 ## Les plantes
@@ -19,6 +19,20 @@ Un jeu de défense en pixel art : sur 5 rangées de potager, des légumes arrêt
 - **Piment** (100, niveau 4) : tire des boules de feu qui font très mal.
 
 Chaque plante a un temps d'attente avant d'en replanter une. La **pelle** retire une plante.
+
+## Les saisons
+
+Les niveaux 1 à 10 se jouent en été, dans un jardin fleuri. Les niveaux 11 à 15 se jouent en automne (feuilles mortes, champignons, feuilles qui tombent) et les niveaux 16 à 20 en hiver (neige, givre, flocons). Les vagues sont de plus en plus grandes. Si tu avais déjà fini le niveau 10, tu reprends directement au niveau 11.
+
+Deux plantes arrivent avec l'automne :
+- **Tournesol** (touche 6, 50 graines, dès le niveau 11) : il donne une grosse graine qui vaut 50, toutes les 12 secondes.
+- **Citrouille** (touche 7, 125 graines, dès le niveau 13) : un mur bien plus solide que le chou.
+
+La pelle passe sur **X** ou **0**.
+
+## Plein écran
+
+Le bouton **Plein écran** agrandit le jardin à tout l'écran (Échap pour en sortir). Hors plein écran, le jeu prend toute la hauteur que laisse la fenêtre.
 
 ## Les nuisibles
 

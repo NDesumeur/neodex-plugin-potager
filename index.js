@@ -1,17 +1,19 @@
 // Potager : des légumes défendent le jardin contre les nuisibles, sur 5 rangées.
 // Jeu NeoDex en pixel art dessiné à la main (police bitmap, cadres et boutons en pixels). Il tourne dans le bac à sable de NeoDex.
 const HTML = `<div class="appWrap wide">
-  <div class="agHead"><span class="label">Potager</span><span class="hint">Clic sur une plante puis sur une case · ou 1 à 5, flèches, Entrée · X : pelle · P : pause</span></div>
-  <div class="gMain"><div class="gameBox"><canvas id="pgCanvas" width="240" height="160" role="img" aria-label="Potager"></canvas></div>
+  <div class="agHead"><span class="label">Potager</span><span class="hint">Clic sur une plante puis sur une case · ou 1 à 7, flèches, Entrée · X : pelle · P : pause</span></div>
+  <div class="gMain"><div class="gameBox"><canvas id="pgCanvas" width="276" height="160" role="img" aria-label="Potager"></canvas></div>
     <div class="gSide">
       <div class="sysCard"><b>RECORDS</b><div class="gStats" id="pgStats"></div></div>
-      <div class="row"><button class="btn main" id="pgNew">NOUVELLE PARTIE</button></div>
+      <div class="row"><button class="btn main" id="pgNew">NOUVELLE PARTIE</button><button class="btn" id="pgFs">PLEIN ÉCRAN</button></div>
       <div class="hint">Des limaces, escargots, corbeaux, taupes et sangliers traversent le jardin de droite à gauche. Plante avec tes graines : le trèfle en donne, le radis et le piment tirent, le chou bloque le passage et l'ortie pique ce qui marche dessus. Ramasse les graines qui tombent en cliquant dessus. Les corbeaux volent au-dessus des plantes, les taupes creusent dessous jusqu'au milieu. Un chat garde chaque rangée, une seule fois. 10 niveaux.</div>
     </div></div>
 </div>`;
 const CSS = `.gMain{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
-.gameBox{display:grid;place-items:center;padding:10px;background:#05010b;flex:0 0 auto;position:relative}
-.gameBox canvas{height:min(72vh,640px);width:auto;aspect-ratio:240/160;image-rendering:pixelated;cursor:var(--cp,pointer);touch-action:none}
+.gameBox{display:grid;place-items:center;padding:10px;background:#05010b;flex:1 1 360px;min-width:min(100%,320px);position:relative}
+.gameBox:fullscreen{padding:0}
+.gameBox:fullscreen canvas{width:min(100vw,calc(100vh * 276 / 160))}
+.gameBox canvas{width:min(100%,max(280px,calc((100vh - 170px) * 276 / 160)));height:auto;aspect-ratio:276/160;image-rendering:pixelated;cursor:var(--cp,pointer);touch-action:none}
 .gSide{display:flex;flex-direction:column;gap:14px;flex:1;min-width:250px;max-width:420px}
 .gSide .sysCard{display:flex;flex-direction:column}
 .gStats{display:grid;grid-template-columns:1fr auto;gap:4px 14px}
@@ -288,7 +290,7 @@ export default async function (ctx) {
   view.innerHTML = HTML;
   pxSkin(view.querySelector('.appWrap'), { title: "POTAGER", T: {"k": "#0c0a12", "k2": "#16121e", "fill": "#221c2c", "fillOn": "#2e263a", "hl": "#3a3046", "line": "#62566e", "acc": "#7ae05a", "accL": "#d8f8c8", "accS": "#3a8a2a", "accD": "#14280a", "rivet": "#f0f0f8", "btn": "#3a3046", "btnHi": "#62566e", "btnLo": "#16121e", "btnHov": "#443852", "btnHovHi": "#82768e", "text": "#f4f0f8", "muted": "#c0b8cc", "acc2": "#7ee07a", "gold": "#ffd84a", "orange": "#ff8a3a", "red": "#ff4a3a", "green": "#7ee07a", "green2": "#2f8a3a", "bg": "#100c16", "bgDot": "#221c2c", "bgDot2": "#16121e", "spark": "#14280a", "spark2": "#7ae05a", "tile": ["................", "...:............", "................", "..........+.....", "................", "................", ".....:..........", "................", "................", ".............:..", "................", "..+.............", "................", ".........:......", "................", "................"]},
   emblem: ["....kk..kk..", "...knNkknNk.", "...knnNknNk.", "....kknNkk..", ".....kkNkk..", "....krrrrrk.", "...krwrrrrrk", "..krwrrrrrrk", "..krrrrrrrrk", "...krrrrrrk.", "....krrrrk..", ".....kkkk..."],
-  icons: [[/^NOUVELLE/, 'play'], [/^RECORDS/, 'crown']] });
+  icons: [[/^NOUVELLE/, 'play'], [/^RECORDS/, 'crown'], [/^PLEIN/, 'full']] });
   const $ = id => view.querySelector('#' + id) || document.getElementById(id);
   const doc = async n => { try { return await folder.read(n); } catch { return null; } };
   const games = { best: {}, ...(await doc('games')) };
@@ -320,13 +322,16 @@ const pxFont = (g, text, x, y, color, size = 8, align = 'left') => { const s = P
 
 /* ---------- Potager : des légumes défendent le jardin contre les nuisibles, sur 5 rangées. On plante avec les graines,
    le trèfle en donne, le radis et le piment tirent, le chou bloque, l'ortie pique. 10 niveaux ; un chat par rangée en dernier recours ---------- */
-const PG = {W: 240, H: 160, X0: 20, Y0: 36, C: 24, COLS: 9, ROWS: 5};
+const PG = {W: 276, H: 160, X0: 20, Y0: 36, C: 24, COLS: 9, ROWS: 5, MAX: 20, CX: 31, CW: 25};
+// les saisons : l'été jusqu'au niveau 10, l'automne de 11 à 15, l'hiver de 16 à 20
+const pgSeason = L => L <= 10 ? 0 : L <= 15 ? 1 : 2, PG_SEASONS = ['Été', 'Automne', 'Hiver'];
 // une nouvelle partie garde le même objet : la boucle du jeu (gameLoop) continue de tourner dessus
 const renew = (old, o) => { if (!old) return o; for (const k of Object.keys(old)) if (k !== 'raf') delete old[k]; return Object.assign(old, o); };
 const pgs = gstore('potager', {level: 1, wins: 0, games: 0, kills: 0});
+if ((games.best.potager || 0) >= 10 && pgs.level < 11) pgs.level = 11;  // qui avait fini les 10 premiers niveaux passe à l'automne
 let pg = null, pgac = null, pgMute = false;
 function pgBeep(f, d, type = 'square', slide = 0, vol = .03) { if (pgMute) return; try { pgac ??= new AudioContext(); const o = pgac.createOscillator(), g = pgac.createGain(), t = pgac.currentTime; o.type = type; o.frequency.setValueAtTime(f, t); if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + d); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + d); o.connect(g).connect(pgac.destination); o.start(t); o.stop(t + d); } catch {} }
-const PG_SPR = {"trefle": {"pal": {"k": "#1a1408", "g": "#5ac03a", "G": "#3a8a2a", "l": "#a8f070", "s": "#2a6a1a", "w": "#ffffff"}, "f": [["................", ".....kk..kk.....", "....klgkkglk....", "....kgggggGk....", ".....kggwGk.....", ".kk...kGGk...kk.", "klgkk..ks..kkglk", "kgggGk.ks.kGgggk", ".kggGGkksskGGgk.", "..kkkk.ks.kkkk..", ".......ks.......", "......kks.......", "......ks........", "......ks........", ".....kssk.......", "................"], ["................", "......kk..kk....", ".....klgkkglk...", ".....kgggggGk...", "......kggwGk....", "..kk...kGGk..kk.", ".klgkk.ks..kkglk", ".kgggGkks.kGgggk", "..kggGGksskGGgk.", "...kkkk.s.kkkk..", ".......ks.......", "......kks.......", "......ks........", "......ks........", ".....kssk.......", "................"]]}, "radis": {"pal": {"k": "#1a1408", "g": "#5ac03a", "G": "#3a8a2a", "r": "#e8406a", "R": "#a82a4a", "w": "#ffd0e0", "e": "#1a1408", "o": "#5a2a1a"}, "f": [["....kk..kk......", "...kgGkkgGk.....", "...kggGkgGk.....", "....kkgGkk......", ".....kkGkk......", "....krrrrrk.....", "...krwrrrrRk....", "..krwrrrrrrRk...", "..krrrrrekrRkkkk", "..krrrrrrrrRkook", "..krrrooorrRkkkk", "...kRrrrrrRk....", "....kRRRRRk.....", ".....kkRkk......", "......kRk.......", ".......k........"], ["....kk..kk......", "...kgGkkgGk.....", "...kggGkgGk.....", "....kkgGkk......", ".....kkGkk......", "....krrrrrk.....", "...krwrrrrRk....", "..krwrrrrrrRk...", "..krrrrrekrRk...", "..krrrrrrrrRkkk.", "..krrrrkkrrRkok.", "...kRrrrrrRkkk..", "....kRRRRRk.....", ".....kkRkk......", "......kRk.......", ".......k........"]]}, "chou": {"pal": {"k": "#1a1408", "g": "#8ad86a", "G": "#5aa84a", "D": "#3a7a3a", "l": "#c8f0a8", "v": "#e8f8d8", "e": "#1a1408"}, "f": [["................", "................", ".....kkkkkk.....", "...kkGgllgGkk...", "..kGglvvvvlgGk..", ".kGglvlllvvlgGk.", ".kGglleklekglGk.", "kDGgllllllllgGDk", "kDGglllkkllglGDk", "kDDGglllllllgGDk", ".kDGGggllggGGDk.", ".kDDGGggggGGDDk.", "..kDDDGGGGDDDk..", "...kkDDDDDDkk...", ".....kkkkkk.....", "................"], ["................", "................", "................", ".....kkkkkk.....", "...kkGgllgGkk...", "..kGglvvvvlgGk..", ".kGglleklekglGk.", "kDGgllllllllgGDk", "kDGglllkkllglGDk", "kDDGglllllllgGDk", ".kDGGggllggGGDk.", ".kDDGGggggGGDDk.", "..kDDDGGGGDDDk..", "...kkDDDDDDkk...", ".....kkkkkk.....", "................"]]}, "piment": {"pal": {"k": "#1a1408", "g": "#5ac03a", "G": "#3a8a2a", "r": "#ff4a2a", "R": "#b82a1a", "y": "#ffd84a", "w": "#ffc8a0", "e": "#1a1408"}, "f": [[".......kk.......", "......kgGk......", ".....kgGGk......", "....kkkGkk......", "...krrrrrrk.....", "..krwrrrrrRk....", "..krwrrekrRkkk..", "..krrrrrrrRkyyk.", "..krrrrkkrRkkk..", "...krrrrrrRk....", "...krrrrrRk.....", "....krrrrRk.....", "....krrrRk......", ".....krRRk......", "......kRk.......", ".......k........"], [".......kk.......", "......kgGk......", ".....kgGGk......", "....kkkGkk......", "...krrrrrrk.....", "..krwrrrrrRk....", "..krwrrekrRk.k..", "..krrrrrrrRkkyk.", "..krrrrkkrRk.k..", "...krrrrrrRk....", "...krrrrrRk.....", "....krrrrRk.....", "....krrrRk......", ".....krRRk......", "......kRk.......", ".......k........"]]}, "ortie": {"pal": {"k": "#1a1408", "g": "#4aa83a", "G": "#2a7a2a", "w": "#e8f8d8"}, "f": [["................", "................", "................", "................", "................", "................", "................", "..k.....k....k..", ".kgk...kgk..kgk.", ".kgGk.kgwGk.kgGk", "kgwGkkgGGGkkgwGk", "kGGGkkGgGGkkGGGk", ".kGkw.kGGk.wkGk.", ".kGk..wkGk..kGk.", "..kG..kGk...Gk..", "..kk...kk...kk.."], ["................", "................", "................", "................", "................", "................", "................", "...k....k...k...", "..kgk..kgk.kgk..", ".kgGk.kgwGkkgGk.", "kgwGkkgGGGkkgwGk", "kGGGkkGgGGkkGGGk", ".kGk.wkGGkw.kGk.", ".kGk..wkGk..kGk.", "..kG..kGk...Gk..", "..kk...kk...kk.."]]}, "limace": {"pal": {"k": "#1a1408", "y": "#d8c84a", "Y": "#a8983a", "w": "#ffffff", "e": "#1a1408", "s": "#c8c8a0"}, "f": [["...k..k.........", "...k..k.........", "..kek.kek.......", "..kyykyyk.......", ".kyyyyyyykkk....", ".kyyyyyyyyyykkk.", "kyyYyyYyyYyyyyyk", "kYYYYYYYYYYYYYYk", ".kkkkkkkkkkkkkk."], ["....k..k........", "....k..k........", "...kek.kek......", "...kyykyyk......", "..kyyyyyyykkkk..", ".kyyyyyyyyyyyykk", ".kyYyyYyyYyyyyyk", "kYYYYYYYYYYYYYYk", ".kkkkkkkkkkkkkk."]]}, "escargot": {"pal": {"k": "#1a1408", "y": "#d8b88a", "Y": "#a8885a", "o": "#c86a2a", "O": "#8a4a1a", "l": "#f0a85a", "e": "#1a1408"}, "f": [[".......kkkkk....", "......kooolok...", "..k..kolOOOlok..", "..k.kolOkkOlok..", ".kekkolOkoOlok..", ".kyykolOOOOlOk..", ".kyyykooolllOk..", "kyyyyykOOOOOkkk.", "kyYyyyyyyyyyyyyk", "kYYYYYYYYYYYYYYk", ".kkkkkkkkkkkkkk."], ["........kkkkk...", ".......kooolok..", "...k..kolOOOlok.", "...k.kolOkkOlok.", "..kekkolOkoOlok.", "..kyykolOOOOlOk.", ".kyyyykooolllOk.", "kyyyyyykOOOOOkk.", "kyYyyyyyyyyyyyyk", "kYYYYYYYYYYYYYYk", ".kkkkkkkkkkkkkk."]]}, "corbeau": {"pal": {"k": "#1a1408", "b": "#3a3450", "B": "#262236", "y": "#ffb02a", "e": "#ff4a3a"}, "f": [["......kk.......", ".....kbbk......", "....kbbbk......", ".kkkbbbbk......", "kyykbebbbkkkkk.", ".kkkbbbbbbbbbbk", "....kbbbbbbBBk.", ".....kkBBBBkk..", ".......k..k....", "......kk.kk...."], ["...............", "...............", "...............", ".kkkkk.........", "kyykbebkkkkkkk.", ".kkkbbbbbbbbbbk", "....kbbbbbbBBk.", ".....kbbbbbbk..", ".....kbbbbk....", "......kkkk....."]]}, "taupe": {"pal": {"k": "#1a1408", "b": "#5a4a5a", "B": "#3a2e3a", "p": "#ff9ab0", "w": "#ffffff", "e": "#1a1408", "c": "#e8d8c8"}, "f": [[".....kkkk.....", "...kkbbbbkk...", "..kbbbbbbbbk..", ".kbbebbbbebbk.", ".kbbbbppbbbbk.", "kbbbbkppkbbbbk", "kbbbbbwwbbbbbk", "kcckbbbbbbkcck", "kcckbbbbbbkcck", ".kkkBBBBBBkkk.", "...kkkkkkkk..."], [".....kkkk.....", "...kkbbbbkk...", "..kbbbbbbbbk..", ".kbbebbbbebbk.", ".kbbbbppbbbbk.", "kbbbbkppkbbbbk", "kcckbbwwbbkcck", "kcckbbbbbbkcck", ".kkkbbbbbbkkk.", "...kBBBBBBk...", "...kkkkkkkk..."]]}, "sanglier": {"pal": {"k": "#1a1408", "b": "#7a5a3a", "B": "#5a3e26", "D": "#3a2614", "w": "#f0f0e0", "e": "#ff4a3a", "p": "#c88a6a"}, "f": [["....k.k.............", "...kbkbk..kkkkkkk...", "..kbbbbbkkDDDDDDDkk.", ".kbebbbbbbBBBBBBBBk.", "kkbbbbbbbbbbbbbbbBk.", "kppbbbbbbbbbbbbbbBkk", "kppkwbbbbbbbbbbbBBk.", ".kkwkbbbbbbbbbbBBk..", "...kbBBBBBBBBBBBk...", "...kBk.kBk..kBk.kBk.", "...kDk..kDk..kDkkDk.", "...kk...kk....kkkk.."], ["....k.k.............", "...kbkbk..kkkkkkk...", "..kbbbbbkkDDDDDDDkk.", ".kbebbbbbbBBBBBBBBk.", "kkbbbbbbbbbbbbbbbBk.", "kppbbbbbbbbbbbbbbBkk", "kppkwbbbbbbbbbbbBBk.", ".kkwkbbbbbbbbbbBBk..", "...kbBBBBBBBBBBBk...", "...kBk..kBkkBk..kBk.", "..kDk..kDk..kDk.kDk.", "..kk...kk...kk..kk.."]]}, "chat": {"pal": {"k": "#1a1408", "o": "#ff9a3a", "O": "#c86a1a", "w": "#ffffff", "e": "#1a1408", "p": "#ff9ab0"}, "f": [["k...k.....", "kokok.....", "kwoowk....", "koeoek..kk", "kowpwk.kok", ".kooookkok", "..kooOOok.", "..kooOOok.", "..kOkkOk..", "..kk.kk..."], ["k...k.....", "kokok.....", "kwoowk....", "koeoek.kk.", "kowpwk.kok", ".kooookkok", "..kooOOok.", "..kooOOok.", "..kOkOk...", "..kk.kk..."]]}};
+const PG_SPR = {"trefle": {"pal": {"k": "#1a1408", "g": "#5ac03a", "G": "#3a8a2a", "l": "#a8f070", "s": "#2a6a1a", "w": "#ffffff"}, "f": [["................", ".....kk..kk.....", "....klgkkglk....", "....kgggggGk....", ".....kggwGk.....", ".kk...kGGk...kk.", "klgkk..ks..kkglk", "kgggGk.ks.kGgggk", ".kggGGkksskGGgk.", "..kkkk.ks.kkkk..", ".......ks.......", "......kks.......", "......ks........", "......ks........", ".....kssk.......", "................"], ["................", "......kk..kk....", ".....klgkkglk...", ".....kgggggGk...", "......kggwGk....", "..kk...kGGk..kk.", ".klgkk.ks..kkglk", ".kgggGkks.kGgggk", "..kggGGksskGGgk.", "...kkkk.s.kkkk..", ".......ks.......", "......kks.......", "......ks........", "......ks........", ".....kssk.......", "................"]]}, "radis": {"pal": {"k": "#1a1408", "g": "#5ac03a", "G": "#3a8a2a", "r": "#e8406a", "R": "#a82a4a", "w": "#ffd0e0", "e": "#1a1408", "o": "#5a2a1a"}, "f": [["....kk..kk......", "...kgGkkgGk.....", "...kggGkgGk.....", "....kkgGkk......", ".....kkGkk......", "....krrrrrk.....", "...krwrrrrRk....", "..krwrrrrrrRk...", "..krrrrrekrRkkkk", "..krrrrrrrrRkook", "..krrrooorrRkkkk", "...kRrrrrrRk....", "....kRRRRRk.....", ".....kkRkk......", "......kRk.......", ".......k........"], ["....kk..kk......", "...kgGkkgGk.....", "...kggGkgGk.....", "....kkgGkk......", ".....kkGkk......", "....krrrrrk.....", "...krwrrrrRk....", "..krwrrrrrrRk...", "..krrrrrekrRk...", "..krrrrrrrrRkkk.", "..krrrrkkrrRkok.", "...kRrrrrrRkkk..", "....kRRRRRk.....", ".....kkRkk......", "......kRk.......", ".......k........"]]}, "chou": {"pal": {"k": "#1a1408", "g": "#8ad86a", "G": "#5aa84a", "D": "#3a7a3a", "l": "#c8f0a8", "v": "#e8f8d8", "e": "#1a1408"}, "f": [["................", "................", ".....kkkkkk.....", "...kkGgllgGkk...", "..kGglvvvvlgGk..", ".kGglvlllvvlgGk.", ".kGglleklekglGk.", "kDGgllllllllgGDk", "kDGglllkkllglGDk", "kDDGglllllllgGDk", ".kDGGggllggGGDk.", ".kDDGGggggGGDDk.", "..kDDDGGGGDDDk..", "...kkDDDDDDkk...", ".....kkkkkk.....", "................"], ["................", "................", "................", ".....kkkkkk.....", "...kkGgllgGkk...", "..kGglvvvvlgGk..", ".kGglleklekglGk.", "kDGgllllllllgGDk", "kDGglllkkllglGDk", "kDDGglllllllgGDk", ".kDGGggllggGGDk.", ".kDDGGggggGGDDk.", "..kDDDGGGGDDDk..", "...kkDDDDDDkk...", ".....kkkkkk.....", "................"]]}, "piment": {"pal": {"k": "#1a1408", "g": "#5ac03a", "G": "#3a8a2a", "r": "#ff4a2a", "R": "#b82a1a", "y": "#ffd84a", "w": "#ffc8a0", "e": "#1a1408"}, "f": [[".......kk.......", "......kgGk......", ".....kgGGk......", "....kkkGkk......", "...krrrrrrk.....", "..krwrrrrrRk....", "..krwrrekrRkkk..", "..krrrrrrrRkyyk.", "..krrrrkkrRkkk..", "...krrrrrrRk....", "...krrrrrRk.....", "....krrrrRk.....", "....krrrRk......", ".....krRRk......", "......kRk.......", ".......k........"], [".......kk.......", "......kgGk......", ".....kgGGk......", "....kkkGkk......", "...krrrrrrk.....", "..krwrrrrrRk....", "..krwrrekrRk.k..", "..krrrrrrrRkkyk.", "..krrrrkkrRk.k..", "...krrrrrrRk....", "...krrrrrRk.....", "....krrrrRk.....", "....krrrRk......", ".....krRRk......", "......kRk.......", ".......k........"]]}, "ortie": {"pal": {"k": "#1a1408", "g": "#4aa83a", "G": "#2a7a2a", "w": "#e8f8d8"}, "f": [["................", "................", "................", "................", "................", "................", "................", "..k.....k....k..", ".kgk...kgk..kgk.", ".kgGk.kgwGk.kgGk", "kgwGkkgGGGkkgwGk", "kGGGkkGgGGkkGGGk", ".kGkw.kGGk.wkGk.", ".kGk..wkGk..kGk.", "..kG..kGk...Gk..", "..kk...kk...kk.."], ["................", "................", "................", "................", "................", "................", "................", "...k....k...k...", "..kgk..kgk.kgk..", ".kgGk.kgwGkkgGk.", "kgwGkkgGGGkkgwGk", "kGGGkkGgGGkkGGGk", ".kGk.wkGGkw.kGk.", ".kGk..wkGk..kGk.", "..kG..kGk...Gk..", "..kk...kk...kk.."]]}, "limace": {"pal": {"k": "#1a1408", "y": "#d8c84a", "Y": "#a8983a", "w": "#ffffff", "e": "#1a1408", "s": "#c8c8a0"}, "f": [["...k..k.........", "...k..k.........", "..kek.kek.......", "..kyykyyk.......", ".kyyyyyyykkk....", ".kyyyyyyyyyykkk.", "kyyYyyYyyYyyyyyk", "kYYYYYYYYYYYYYYk", ".kkkkkkkkkkkkkk."], ["....k..k........", "....k..k........", "...kek.kek......", "...kyykyyk......", "..kyyyyyyykkkk..", ".kyyyyyyyyyyyykk", ".kyYyyYyyYyyyyyk", "kYYYYYYYYYYYYYYk", ".kkkkkkkkkkkkkk."]]}, "escargot": {"pal": {"k": "#1a1408", "y": "#d8b88a", "Y": "#a8885a", "o": "#c86a2a", "O": "#8a4a1a", "l": "#f0a85a", "e": "#1a1408"}, "f": [[".......kkkkk....", "......kooolok...", "..k..kolOOOlok..", "..k.kolOkkOlok..", ".kekkolOkoOlok..", ".kyykolOOOOlOk..", ".kyyykooolllOk..", "kyyyyykOOOOOkkk.", "kyYyyyyyyyyyyyyk", "kYYYYYYYYYYYYYYk", ".kkkkkkkkkkkkkk."], ["........kkkkk...", ".......kooolok..", "...k..kolOOOlok.", "...k.kolOkkOlok.", "..kekkolOkoOlok.", "..kyykolOOOOlOk.", ".kyyyykooolllOk.", "kyyyyyykOOOOOkk.", "kyYyyyyyyyyyyyyk", "kYYYYYYYYYYYYYYk", ".kkkkkkkkkkkkkk."]]}, "corbeau": {"pal": {"k": "#1a1408", "b": "#3a3450", "B": "#262236", "y": "#ffb02a", "e": "#ff4a3a"}, "f": [["......kk.......", ".....kbbk......", "....kbbbk......", ".kkkbbbbk......", "kyykbebbbkkkkk.", ".kkkbbbbbbbbbbk", "....kbbbbbbBBk.", ".....kkBBBBkk..", ".......k..k....", "......kk.kk...."], ["...............", "...............", "...............", ".kkkkk.........", "kyykbebkkkkkkk.", ".kkkbbbbbbbbbbk", "....kbbbbbbBBk.", ".....kbbbbbbk..", ".....kbbbbk....", "......kkkk....."]]}, "taupe": {"pal": {"k": "#1a1408", "b": "#5a4a5a", "B": "#3a2e3a", "p": "#ff9ab0", "w": "#ffffff", "e": "#1a1408", "c": "#e8d8c8"}, "f": [[".....kkkk.....", "...kkbbbbkk...", "..kbbbbbbbbk..", ".kbbebbbbebbk.", ".kbbbbppbbbbk.", "kbbbbkppkbbbbk", "kbbbbbwwbbbbbk", "kcckbbbbbbkcck", "kcckbbbbbbkcck", ".kkkBBBBBBkkk.", "...kkkkkkkk..."], [".....kkkk.....", "...kkbbbbkk...", "..kbbbbbbbbk..", ".kbbebbbbebbk.", ".kbbbbppbbbbk.", "kbbbbkppkbbbbk", "kcckbbwwbbkcck", "kcckbbbbbbkcck", ".kkkbbbbbbkkk.", "...kBBBBBBk...", "...kkkkkkkk..."]]}, "sanglier": {"pal": {"k": "#1a1408", "b": "#7a5a3a", "B": "#5a3e26", "D": "#3a2614", "w": "#f0f0e0", "e": "#ff4a3a", "p": "#c88a6a"}, "f": [["....k.k.............", "...kbkbk..kkkkkkk...", "..kbbbbbkkDDDDDDDkk.", ".kbebbbbbbBBBBBBBBk.", "kkbbbbbbbbbbbbbbbBk.", "kppbbbbbbbbbbbbbbBkk", "kppkwbbbbbbbbbbbBBk.", ".kkwkbbbbbbbbbbBBk..", "...kbBBBBBBBBBBBk...", "...kBk.kBk..kBk.kBk.", "...kDk..kDk..kDkkDk.", "...kk...kk....kkkk.."], ["....k.k.............", "...kbkbk..kkkkkkk...", "..kbbbbbkkDDDDDDDkk.", ".kbebbbbbbBBBBBBBBk.", "kkbbbbbbbbbbbbbbbBk.", "kppbbbbbbbbbbbbbbBkk", "kppkwbbbbbbbbbbbBBk.", ".kkwkbbbbbbbbbbBBk..", "...kbBBBBBBBBBBBk...", "...kBk..kBkkBk..kBk.", "..kDk..kDk..kDk.kDk.", "..kk...kk...kk..kk.."]]}, "chat": {"pal": {"k": "#1a1408", "o": "#ff9a3a", "O": "#c86a1a", "w": "#ffffff", "e": "#1a1408", "p": "#ff9ab0"}, "f": [["k...k.....", "kokok.....", "kwoowk....", "koeoek..kk", "kowpwk.kok", ".kooookkok", "..kooOOok.", "..kooOOok.", "..kOkkOk..", "..kk.kk..."], ["k...k.....", "kokok.....", "kwoowk....", "koeoek.kk.", "kowpwk.kok", ".kooookkok", "..kooOOok.", "..kooOOok.", "..kOkOk...", "..kk.kk..."]]}, "tournesol": {"pal": {"k": "#1a1408", "y": "#ffd84a", "Y": "#e8a020", "o": "#8a5a2a", "O": "#5a3a1a", "g": "#5ac03a", "G": "#3a8a2a", "e": "#1a1408"}, "f": [[".......kk.......", "....kkkyykkk....", "...kyykyykyyk...", "...kyyyOOyyyk...", "...kkyooooykk...", "..kyyOeooeOyyk..", "..kyyOoooOOyyk..", "...kkyooOOykk...", "...kYYYOOYYYk...", "...kYYkYYkYYk...", "....kkkYYkkk....", "....kkkgGk......", "...kggggGkkk....", "....kgggGGGGk...", ".....kkgGGGk....", "......kgGkk....."], [".......k........", "......kyk.kk....", "....kkkyykyyk...", "...kyyyyyyyyk...", "...kyyOooOykk...", "...kyOooooOyyk..", "..kyyOeooeOyyk..", "..kyyOooOOOyk...", "...kkYOOOOYYk...", "...kYYYYYYYYk...", "...kYYkYYkkk....", "....kgggGk......", "...kggggGkkk....", "....kkkgGGGGk...", "......kgGGGk....", "......kgGkk....."]]}, "citrouille": {"pal": {"k": "#1a1408", "o": "#ff8a2a", "O": "#c85a1a", "l": "#ffb86a", "g": "#5ac03a", "G": "#3a7a2a", "e": "#1a1408", "y": "#ffd84a"}, "f": [["................", ".......kkk......", "......kGGgk.....", "......kGGggk....", "......kGGkk.....", ".....kkGGkk.....", "...kkOooooOkk...", "..kllOooooOook..", ".klleOooooOeook.", "klllleooooeooook", "kooooOooooOooook", "kooooOeyeeOooook", "kooooOooooOooook", ".koooOooooOoook.", "..kooOooooOook..", "...kkOooooOkk..."], ["................", "................", ".......kkk......", "......kGGgk.....", "......kGGggk....", "......kGGkk.....", "....kkkGGkkk....", "..kklOooooOokk..", ".klleOooooOeook.", "klllleooooeooook", "kooooOooooOooook", "kooooOeyeeOooook", "kooooOooooOooook", ".koooOooooOoook.", "..kooOooooOook..", "...kkOooooOkk..."]]}};
 const PG_SEED = {"pal": {"k": "#1a1408", "y": "#ffd84a", "Y": "#c89a2a", "w": "#fff8d0"}, "f": ["..kkkk..", ".kywyyk.", "kywyyyYk", "kyyyyyYk", "kyyyyYYk", ".kyyYYk.", "..kYYk..", "...kk..."]};
 // les plantes : prix, temps avant de pouvoir en replanter une, vie, et ce qu'elles font ; « from » : le niveau où on la reçoit
 const PG_PLANTS = {
@@ -334,8 +339,21 @@ const PG_PLANTS = {
   radis: {name: 'Radis', cost: 50, wait: 300, hp: 60, rate: 84, dmg: 10, from: 1},
   chou: {name: 'Chou', cost: 50, wait: 1200, hp: 480, from: 2},
   ortie: {name: 'Ortie', cost: 25, wait: 900, hp: 1e9, sting: .5, from: 3},
-  piment: {name: 'Piment', cost: 100, wait: 600, hp: 60, rate: 100, dmg: 28, from: 4}};
-const PG_KEYS = Object.keys(PG_PLANTS);
+  piment: {name: 'Piment', cost: 100, wait: 600, hp: 60, rate: 100, dmg: 28, from: 4},
+  tournesol: {name: 'Tournesol', cost: 50, wait: 600, hp: 60, make: 720, seed: 50, from: 11},
+  citrouille: {name: 'Citrouille', cost: 125, wait: 1500, hp: 1400, from: 13}};
+const PG_KEYS = Object.keys(PG_PLANTS), PG_SHOVEL = PG.CX + PG_KEYS.length * PG.CW + 2;
+const PG_SEED_BIG = ['..kkkk..', '.kywyyk.', 'kywyyyYk', 'kyykkyYk', 'kyykkYYk', 'kyyyyYYk', '.kyyYYk.', '..kkkk..'];  // la grosse graine du tournesol, rayée
+// les couleurs et le décor de chaque saison : de petites fleurs l'été, feuilles mortes et champignons l'automne, tas de neige et cailloux l'hiver
+const pgFlower = c => (g, x, y) => { px(g, '#3a7a2a', x + 1, y + 2, 1, 2); px(g, c, x, y + 1, 3, 1); px(g, c, x + 1, y, 1, 3); px(g, '#ffd84a', x + 1, y + 1, 1, 1); };
+const pgLeaf = c => (g, x, y) => { px(g, c, x, y, 3, 1); px(g, c, x + 1, y + 1, 2, 1); };
+const PG_THEME = [
+  {grass: '#58a840', tuft: '#7ad050', tuft2: '#3a8a2a', soil: ['#7a5634', '#6e4c2c'], furrow: ['#6a4a2c', '#5e4024'], stone: '#a8907a', stone2: '#5a4028', sprout: '#7ae05a', title: '#c8f0a8',
+    deco: ['#ff5a6a', '#ffffff', '#ff9ad8', '#8ab8ff', '#ffd84a'].map(pgFlower)},
+  {grass: '#8a9a3a', tuft: '#b0b04a', tuft2: '#6a7a2a', soil: ['#6e4a2c', '#624226'], furrow: ['#5e3e22', '#52361e'], stone: '#9a8a7a', stone2: '#4a3420', sprout: '#c8a03a', title: '#ffb86a',
+    deco: [...['#e8742a', '#c8402a', '#e8b02a'].map(pgLeaf), (g, x, y) => { px(g, '#c8302a', x, y, 3, 1); px(g, '#ffffff', x + 1, y, 1, 1); px(g, '#e8d8c0', x + 1, y + 1, 1, 2); }]},
+  {grass: '#d8e4f0', tuft: '#ffffff', tuft2: '#a8bcd8', soil: ['#6a5650', '#5e4c46'], furrow: ['#56443e', '#4c3c36'], stone: '#c8d0e0', stone2: '#3a2e2a', sprout: '#a8c8a0', title: '#c8e8ff',
+    deco: [(g, x, y) => { px(g, '#ffffff', x, y, 4, 2); px(g, '#ffffff', x + 1, y - 1, 2, 1); px(g, '#a8bcd8', x, y + 2, 4, 1); }, (g, x, y) => { px(g, '#8a8a9a', x, y, 3, 2); px(g, '#ffffff', x, y, 3, 1); }]}];
 // les nuisibles : vie, vitesse, morsure (par image), et le niveau où ils arrivent
 const PG_PESTS = {limace: {hp: 60, spd: .13, bite: .4, from: 1}, escargot: {hp: 150, spd: .09, bite: .4, from: 3}, corbeau: {hp: 45, spd: .32, bite: 0, fly: 1, from: 4},
   taupe: {hp: 90, spd: .26, bite: .5, dig: 1, from: 6}, sanglier: {hp: 340, spd: .17, bite: 1.2, from: 8}};
@@ -364,11 +382,11 @@ const pgCanPlant = (k, c, r) => pgUnlocked(k) && pg.money >= PG_PLANTS[k].cost &
 function pgPlant(k, c, r) {
   if (!pgCanPlant(k, c, r)) { pgBeep(140, .08); return false; }
   const P = PG_PLANTS[k]; pg.money -= P.cost; pg.wait[k] = P.wait;
-  pg.plants.push({k, c, r, hp: P.hp, cd: k === 'trefle' ? 200 : 20, f: pg.rnd() * 30 | 0}); pgBeep(520, .06, 'triangle', 780); return true;
+  pg.plants.push({k, c, r, hp: P.hp, cd: P.make ? 200 : 20, f: pg.rnd() * 30 | 0}); pgBeep(520, .06, 'triangle', 780); return true;
 }
 function pgDig(c, r) { const p = pgAt(c, r); if (p) { pg.plants.splice(pg.plants.indexOf(p), 1); pgBeep(220, .08, 'square', 120); } }
 const pgPx = c => PG.X0 + c * PG.C, pgPy = r => PG.Y0 + r * PG.C;
-function pgCollect(d) { if (d.got) return; d.got = 1; pg.money += 25; pg.fx.push({k: 'txt', x: d.x, y: d.y, t: 30, s: '+25'}); pgBeep(1046, .06, 'triangle', 1400, .02); }
+function pgCollect(d) { if (d.got) return; d.got = 1; const v = d.v || 25; pg.money += v; pg.fx.push({k: 'txt', x: d.x, y: d.y, t: 30, s: '+' + v}); pgBeep(1046, .06, 'triangle', 1400, .02); }
 function pgUpdate() {
   pg.t++;
   for (const k in pg.wait) if (pg.wait[k] > 0) pg.wait[k]--;
@@ -386,7 +404,7 @@ function pgUpdate() {
   // les plantes
   for (const p of pg.plants) {
     const P = PG_PLANTS[p.k]; p.f++;
-    if (p.k === 'trefle' && --p.cd <= 0) { p.cd = P.make; pg.drops.push({x: pgPx(p.c) + 12, y: pgPy(p.r) + 4, ty: pgPy(p.r) + 8, t: 0}); }
+    if (P.make && --p.cd <= 0) { p.cd = P.make; pg.drops.push({x: pgPx(p.c) + 12, y: pgPy(p.r) + 4, ty: pgPy(p.r) + 8, t: 0, v: P.seed}); }
     if (P.rate && --p.cd <= 0) {
       const x0 = pgPx(p.c) + 12;
       if (pg.pests.some(e => e.r === p.r && !e.dig && e.x > x0 && e.x < PG.W + 2)) { p.cd = P.rate; p.shoot = 8; pg.shots.push({r: p.r, x: x0 + 4, y: pgPy(p.r) + 9, dmg: P.dmg, fire: p.k === 'piment'}); pgBeep(p.k === 'piment' ? 300 : 700, .04, 'square', 0, .015); }
@@ -423,7 +441,7 @@ function pgUpdate() {
 }
 function pgEnd(win) {
   pg.mode = 'over'; pg.won = win; pg.dead = 0; pgs.games++; pgs.kills += pg.kills;
-  if (win) { pgs.wins++; best('potager', pg.L); if (pg.L >= pgs.level) pgs.level = Math.min(10, pg.L + 1); }
+  if (win) { pgs.wins++; best('potager', pg.L); if (pg.L >= pgs.level) pgs.level = Math.min(PG.MAX, pg.L + 1); }
   saveGames(); pgInfo();
   (win ? [523, 659, 784, 1047] : [392, 330, 262, 196]).forEach((f, i) => setTimeout(() => pgBeep(f, .16, 'triangle'), i * 130));
 }
@@ -434,11 +452,20 @@ function pgDraw() {
   const g = pg.g, {W, H, X0, Y0, C, COLS, ROWS} = PG;
   for (; pg.seen < pg.tick; pg.seen++) if (pg.mode === 'over') pg.dead++;
   g.imageSmoothingEnabled = false;
-  // le jardin : planches de terre en damier, sillons, la clôture et la maison à gauche
-  px(g, '#4a8a3a', 0, 28, W, H - 28);
+  // le jardin selon la saison : l'herbe et ses touffes, des fleurs (l'été), des feuilles mortes et des champignons (l'automne), la neige (l'hiver) ;
+  // planches de terre en damier avec leurs sillons, cailloux et petites pousses, la clôture à gauche
+  const SE = pgSeason(pg.L), T = PG_THEME[SE], dr = seeded(7);
+  px(g, T.grass, 0, 28, W, H - 28);
+  for (let i = 0; i < 160; i++) { const x = dr() * W | 0, y = 29 + dr() * (H - 30) | 0; px(g, dr() < .5 ? T.tuft : T.tuft2, x, y, 1, 2); px(g, T.tuft, x + 1, y + 1, 1, 1); }
+  for (let i = 0; i < 260; i++) { const x = dr() * W | 0, y = 29 + dr() * (H - 30) | 0, k = dr() * T.deco.length | 0;
+    if (x > X0 - 3 && x < X0 + COLS * C && y > Y0 - 3 && y < Y0 + ROWS * C || x < 13) continue;  // sur l'herbe seulement, pas sous les chats
+    T.deco[k](g, x, y); }
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
-    const x = pgPx(c), y = pgPy(r); px(g, (r + c) & 1 ? '#6e4c2c' : '#7a5634', x, y, C, C);
-    px(g, (r + c) & 1 ? '#5e4024' : '#6a4a2c', x + 2, y + 7, C - 4, 1); px(g, (r + c) & 1 ? '#5e4024' : '#6a4a2c', x + 2, y + 16, C - 4, 1);
+    const x = pgPx(c), y = pgPy(r), o = (r + c) & 1, h = (r * 7 + c * 13) % 5; px(g, T.soil[o], x, y, C, C);
+    px(g, T.furrow[o], x + 2, y + 7, C - 4, 1); px(g, T.furrow[o], x + 2, y + 16, C - 4, 1);
+    px(g, T.stone, x + 3 + h * 3, y + 11, 2, 1); px(g, T.stone2, x + 3 + h * 3, y + 12, 2, 1);
+    if (h < 2) { px(g, T.sprout, x + 18 - h * 9, y + 19, 1, 2); px(g, T.sprout, x + 17 - h * 9, y + 19, 1, 1); px(g, T.sprout, x + 19 - h * 9, y + 19, 1, 1); }
+    if (SE === 2) for (let i = 0; i < 4; i++) px(g, '#e8f0ff', x + (h * 5 + i * 7) % 22 + 1, y + (i * 9 + h) % 22 + 1, 1, 1);  // le givre sur la terre
   }
   for (let y = Y0 - 2; y < Y0 + ROWS * C; y += 6) { px(g, '#c8a070', 14, y, 3, 5); px(g, '#8a6a40', 16, y, 1, 5); }
   px(g, '#a87a4a', 13, Y0 + 2, 5, 1); px(g, '#a87a4a', 13, Y0 + ROWS * C - 6, 5, 1);
@@ -463,33 +490,36 @@ function pgDraw() {
     if (f.k === 'dirt') for (let i = 0; i < 6; i++) px(g, '#5a3e22', f.x - 6 + i * 2, f.y - (16 - f.t) * (i % 3 + 1) * .4, 2, 2);
     if (f.k === 'txt') pxFont(g, f.s, f.x, f.y - (30 - f.t) * .4, '#ffd84a', 8, 'center');
   }
-  for (const d of pg.drops) sprite(g, PG_SEED.f, Math.round(d.x - 4), Math.round(d.y - 4 + (d.y >= d.ty ? Math.round(Math.sin(d.t / 8)) : 0)), PG_SEED.pal);
+  // ce qui tombe du ciel : des feuilles en automne, des flocons en hiver (sans mémoire : leur place se calcule depuis l'heure du jeu)
+  if (SE) for (let i = 0; i < 26; i++) { const v = .25 + (i % 4) * .08, x = ((i * 47 + Math.sin((pg.tick + i * 40) / 30) * 6 - pg.tick * v * (SE === 1 ? .6 : .2)) % W + W) % W, y = (i * 61 + pg.tick * v) % (H - 28) + 28;
+    if (SE === 1) { px(g, ['#e8742a', '#c8402a', '#e8b02a', '#a8602a'][i % 4], x, y, 2, 1); px(g, '#6a3a1a', x + (i % 2), y + 1, 1, 1); } else px(g, '#ffffff', x, y, i % 3 ? 1 : 2, i % 3 ? 1 : 2); }
+  for (const d of pg.drops) sprite(g, d.v > 25 ? PG_SEED_BIG : PG_SEED.f, Math.round(d.x - 4), Math.round(d.y - 4 + (d.y >= d.ty ? Math.round(Math.sin(d.t / 8)) : 0)), PG_SEED.pal);
   // le haut : les graines et les cartes des plantes
   px(g, '#5a3e22', 0, 0, W, 28); px(g, '#7a5634', 0, 0, W, 1); px(g, '#3a2614', 0, 27, W, 1);
   sprite(g, PG_SEED.f, 4, 4, PG_SEED.pal); pxFont(g, String(pg.money), 18, 20, '#ffd84a', 8, 'center');
   PG_KEYS.forEach((k, i) => {
-    const x = 34 + i * 28, on = pg.sel === i && !pg.shovel, P = PG_PLANTS[k], open = pgUnlocked(k);
-    px(g, on ? '#ffd84a' : '#2a1a0a', x, 2, 26, 24); px(g, open ? '#e8d8b0' : '#6a5a4a', x + 1, 3, 24, 22);
-    if (!open) { sprite(g, ['..kkk..', '.k...k.', '.k...k.', 'kkkkkkk', 'kyyyyyk', 'kyykyyk', 'kyyyyyk', 'kkkkkkk'], x + 9, 4, {k: '#3a2a1a', y: '#c8a04a'}); pxFont(g, String(P.from), x + 13, 23, '#3a2a1a', 8, 'center'); return; }
-    sprite(g, PG_SPR[k].f[0], x + 5, 2, PG_SPR[k].pal);
+    const x = PG.CX + i * PG.CW, on = pg.sel === i && !pg.shovel, P = PG_PLANTS[k], open = pgUnlocked(k);
+    px(g, on ? '#ffd84a' : '#2a1a0a', x, 2, 24, 24); px(g, open ? '#e8d8b0' : '#6a5a4a', x + 1, 3, 22, 22);
+    if (!open) { sprite(g, ['..kkk..', '.k...k.', '.k...k.', 'kkkkkkk', 'kyyyyyk', 'kyykyyk', 'kyyyyyk', 'kkkkkkk'], x + 8, 4, {k: '#3a2a1a', y: '#c8a04a'}); pxFont(g, String(P.from), x + 12, 23, '#3a2a1a', 8, 'center'); return; }
+    sprite(g, PG_SPR[k].f[0], x + 4, 2, PG_SPR[k].pal);
     const dim = pg.money < P.cost || pg.wait[k] > 0;
-    if (pg.wait[k] > 0) px(g, 'rgba(26,20,8,.55)', x + 1, 3, 24, Math.round(22 * pg.wait[k] / P.wait));
-    else if (dim) px(g, 'rgba(26,20,8,.35)', x + 1, 3, 24, 22);
-    px(g, '#3a2a1a', x + 1, 18, 24, 7); pxFont(g, String(P.cost), x + 13, 24, pg.money >= P.cost ? '#ffd84a' : '#ff6a5a', 8, 'center');
+    if (pg.wait[k] > 0) px(g, 'rgba(26,20,8,.55)', x + 1, 3, 22, Math.round(22 * pg.wait[k] / P.wait));
+    else if (dim) px(g, 'rgba(26,20,8,.35)', x + 1, 3, 22, 22);
+    px(g, '#3a2a1a', x + 1, 18, 22, 7); pxFont(g, String(P.cost), x + 12, 24, pg.money >= P.cost ? '#ffd84a' : '#ff6a5a', 8, 'center');
   });
-  { const x = 176, on = pg.shovel; px(g, on ? '#ffd84a' : '#2a1a0a', x, 2, 22, 24); px(g, '#e8d8b0', x + 1, 3, 20, 22);
+  { const x = PG_SHOVEL, on = pg.shovel; px(g, on ? '#ffd84a' : '#2a1a0a', x, 2, 22, 24); px(g, '#e8d8b0', x + 1, 3, 20, 22);
     sprite(g, ['....kk', '...kBk', '..kBk.', '.kBk..', 'kggk..', 'kgggk.', 'kggk..', '.kk...'].map(r => '..' + r), x + 4, 8, {k: '#1a1408', B: '#8a5a3a', g: '#a8a8b8'}); }
   pxFont(g, 'Niv ' + pg.L, W - 3, 12, '#ffffff', 8, 'right');
   const done = pg.waves.length ? pg.waves.filter((w, i) => i < pg.wi).length / pg.waves.length : 0;
-  px(g, '#2a1a0a', 202, 17, 35, 5); px(g, '#7ae05a', 203, 18, Math.round(33 * done), 3);
+  px(g, '#2a1a0a', W - 38, 17, 35, 5); px(g, '#7ae05a', W - 37, 18, Math.round(33 * done), 3);
   if (pg.banner) gameText(g, W, [['GRANDE VAGUE !', (pg.banner >> 3) % 2 ? '#ff4a3a' : '#ffd84a', 12]], 90);
-  if (pg.mode === 'ready') gameText(g, W, [['POTAGER · NIVEAU ' + pg.L, '#ffd84a', 12], ['Choisis une plante, puis une case', '#ffffff'], ['Garde les nuisibles loin de la maison !', '#c8f0a8'], ['Espace : commencer', '#b8b0c8']], 64);
+  if (pg.mode === 'ready') gameText(g, W, [['POTAGER · NIVEAU ' + pg.L, '#ffd84a', 12], [PG_SEASONS[SE] + (pg.L === 11 ? ' : le tournesol arrive' : pg.L === 13 ? ' : la citrouille arrive' : ''), T.title], ['Choisis une plante, puis une case', '#ffffff'], ['Garde les nuisibles loin de la maison !', '#c8f0a8'], ['Espace : commencer', '#b8b0c8']], 58);
   if (pg.mode === 'pause') gameText(g, W, [['PAUSE', '#ffd84a', 12], ['Entrée : reprendre', '#b8b0c8']], 80);
-  if (pg.mode === 'over' && pg.dead > 30) gameText(g, W, pg.won ? [['JARDIN SAUVÉ !', '#7ae05a', 12], ['Niveau ' + pg.L + ' fini, ' + pg.kills + ' nuisibles', '#ffffff'], [pg.L < 10 ? (pg.dead > 60 ? 'Espace : niveau suivant' : '') : 'Tous les niveaux sont finis !', '#ffd84a']]
+  if (pg.mode === 'over' && pg.dead > 30) gameText(g, W, pg.won ? [['JARDIN SAUVÉ !', '#7ae05a', 12], ['Niveau ' + pg.L + ' fini, ' + pg.kills + ' nuisibles', '#ffffff'], [pg.L < PG.MAX ? (pg.dead > 60 ? 'Espace : niveau suivant' : '') : 'Tous les niveaux sont finis !', '#ffd84a']]
     : [['LE POTAGER EST ENVAHI', '#ff4a3a', 12], ['Niveau ' + pg.L + ', ' + pg.kills + ' nuisibles', '#ffffff'], [pg.dead > 60 ? 'Espace : recommencer' : '', '#b8b0c8']], 72);
   if (pg.tick % 15 === 0) {
     const [c, r] = pg.cur, here = pgAt(c, r);
-    g.canvas.setAttribute('aria-label', 'Potager, niveau ' + pg.L + ' : ' + pg.money + ' graines, plante choisie ' + (pg.shovel ? 'pelle' : PG_PLANTS[PG_KEYS[pg.sel]].name) + ', case colonne ' + (c + 1) + ' rangée ' + (r + 1) + (here ? ' (' + PG_PLANTS[here.k].name + ')' : '') +
+    g.canvas.setAttribute('aria-label', 'Potager, niveau ' + pg.L + ' : ' + pg.money + ' graines, ' + PG_SEASONS[SE].toLowerCase() + ', plante choisie ' + (pg.shovel ? 'pelle' : PG_PLANTS[PG_KEYS[pg.sel]].name) + ', case colonne ' + (c + 1) + ' rangée ' + (r + 1) + (here ? ' (' + PG_PLANTS[here.k].name + ')' : '') +
       ', ' + pg.plants.length + ' plantes, ' + pg.pests.length + ' nuisibles, ' + pg.kills + ' vaincus' + (pg.mode === 'over' ? (pg.won ? ', gagné' : ', perdu') : '') + '.');
   }
 }
@@ -499,12 +529,12 @@ function pgInfo() {
 document.addEventListener('keydown', e => {
   if (!view.classList.contains('on') || !pg || /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
   const k = e.key;
-  if (pg.mode === 'over') { if ((k === ' ' || k === 'Enter') && pg.dead > 60) { e.preventDefault(); pgNew(pg.won ? Math.min(10, pg.L + 1) : pg.L); } return; }
+  if (pg.mode === 'over') { if ((k === ' ' || k === 'Enter') && pg.dead > 60) { e.preventDefault(); pgNew(pg.won ? Math.min(PG.MAX, pg.L + 1) : pg.L); } return; }
   if (k === 'p' || k === 'P' || k === 'Escape') { if (pg.mode === 'play') pg.mode = 'pause'; else if (pg.mode === 'pause') pg.mode = 'play'; return; }
   const mv = {ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1]}[k];
   if (mv) { e.preventDefault(); pg.cur = [Math.max(0, Math.min(PG.COLS - 1, pg.cur[0] + mv[0])), Math.max(0, Math.min(PG.ROWS - 1, pg.cur[1] + mv[1]))]; return; }
-  if (/^[1-5]$/.test(k)) { pg.sel = +k - 1; pg.shovel = false; return; }
-  if (k === 'x' || k === 'X' || k === '6') { pg.shovel = !pg.shovel; return; }
+  if (/^[1-7]$/.test(k)) { pg.sel = +k - 1; pg.shovel = false; return; }
+  if (k === 'x' || k === 'X' || k === '0') { pg.shovel = !pg.shovel; return; }
   if (k === 'c' || k === 'C') { const d = pg.drops.find(d => !d.got); if (d) pgCollect(d); return; }
   if (k === ' ' || k === 'Enter') { e.preventDefault(); if (pg.mode !== 'play') { pg.mode = 'play'; return; } if (pg.shovel) { pgDig(...pg.cur); pg.shovel = false; } else pgPlant(PG_KEYS[pg.sel], ...pg.cur); }
 });
@@ -512,14 +542,16 @@ document.addEventListener('keydown', e => {
   const at = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * PG.W, (e.clientY - r.top) / r.height * PG.H]; };
   cv.onpointermove = e => { if (!pg) return; const [x, y] = at(e), c = Math.floor((x - PG.X0) / PG.C), r = Math.floor((y - PG.Y0) / PG.C); if (c >= 0 && c < PG.COLS && r >= 0 && r < PG.ROWS) pg.cur = [c, r]; };
   cv.onpointerdown = e => { e.preventDefault(); if (!pg) return; const [x, y] = at(e);
-    if (pg.mode === 'over') { if (pg.dead > 60) pgNew(pg.won ? Math.min(10, pg.L + 1) : pg.L); return; }
+    if (pg.mode === 'over') { if (pg.dead > 60) pgNew(pg.won ? Math.min(PG.MAX, pg.L + 1) : pg.L); return; }
     if (pg.mode !== 'play') { pg.mode = 'play'; return; }
     const d = pg.drops.find(d => !d.got && Math.abs(d.x - x) < 8 && Math.abs(d.y - y) < 8); if (d) return pgCollect(d);
-    if (y < 28) { const i = Math.floor((x - 34) / 28); if (x >= 176 && x < 198) pg.shovel = !pg.shovel; else if (i >= 0 && i < PG_KEYS.length && (x - 34) % 28 < 26) { pg.sel = i; pg.shovel = false; } return; }
+    if (y < 28) { const i = Math.floor((x - PG.CX) / PG.CW); if (x >= PG_SHOVEL && x < PG_SHOVEL + 22) pg.shovel = !pg.shovel; else if (i >= 0 && i < PG_KEYS.length && (x - PG.CX) % PG.CW < 24) { pg.sel = i; pg.shovel = false; } return; }
     const c = Math.floor((x - PG.X0) / PG.C), r = Math.floor((y - PG.Y0) / PG.C); if (c < 0 || c >= PG.COLS || r < 0 || r >= PG.ROWS) return;
     pg.cur = [c, r]; if (pg.shovel) { pgDig(c, r); pg.shovel = false; } else pgPlant(PG_KEYS[pg.sel], c, r); };
 }
 $('pgNew').onclick = () => { pgNew(pg?.L || pgs.level); $('pgNew').blur(); };
+$('pgFs').onclick = () => { $('pgFs').blur(); try { document.fullscreenElement ? document.exitFullscreen() : $('pgCanvas').parentElement.requestFullscreen?.().catch(() => {}); } catch {} };
+$('pgCanvas').__pg = {st: () => pg, nw: L => pgNew(L)};
 // le jardinier automatique de la vérification : des trèfles d'abord, puis des tireurs dans les rangées menacées, des choux devant, des orties, des piments
 function pgBot() {
   for (const d of pg.drops) if (d.t > 60) pgCollect(d);
@@ -528,13 +560,14 @@ function pgBot() {
   for (const r of [...rows].sort((a, b) => threat(b) - threat(a))) if (threat(r) && !shooters(r) && (tryP('radis', 1, r) || tryP('radis', 2, r))) return;
   const clovers = pg.plants.filter(p => p.k === 'trefle').length;
   if (clovers < 3) { for (const r of rows) if (tryP('trefle', 0, r)) return; }
-  const plan = [['radis', 1], ['trefle', 0], ['radis', 2], ['chou', 6], ['piment', 3], ['ortie', 7], ['radis', 4], ['piment', 5]];
+  for (const e of pg.pests) if (e.dig && (tryP('ortie', 3, e.r) || tryP('radis', 2, e.r) || tryP('piment', 4, e.r))) return;  // une taupe sous terre : de l'ortie là où elle ressort
+  const plan = [['radis', 1], ['tournesol', 0], ['trefle', 0], ['radis', 2], ['chou', 6], ['citrouille', 6], ['piment', 4], ['ortie', 3], ['ortie', 7], ['piment', 5], ['citrouille', 7], ['radis', 8]];
   for (const [k, c] of plan) for (const r of [...rows].sort((a, b) => threat(b) - threat(a))) if (tryP(k, c, r)) return;
 }
-{  // vérification : le jardinier automatique gagne les niveaux 1, 5 et 10 ; sans plantes, les chats sauvent une fois puis c'est perdu ; on ne plante pas sans graines
+{  // vérification : le jardinier automatique gagne les niveaux 1, 5, 10, 15 et 20 ; sans plantes, les chats sauvent une fois puis c'est perdu ; on ne plante pas sans graines
   const bad = [], keep = pg, keepS = JSON.stringify(pgs), keepB = games.best.potager;
   pgMute = true;
-  for (const L of [1, 5, 10]) { pg = null; pgNew(L); pg.rnd = seeded(L * 13); pg.waves = pgWaves(L, seeded(L * 13)); pg.mode = 'play'; for (let t = 0; t < 40000 && pg.mode === 'play'; t++) { pgBot(); pgUpdate(); } if (!pg.won) bad.push('niveau ' + L + ' perdu (' + pg.kills + ' vaincus, vague ' + pg.wi + '/' + pg.waves.length + ')'); }
+  for (const L of [1, 5, 10, 15, 20]) { pg = null; pgNew(L); pg.rnd = seeded(L * 13); pg.waves = pgWaves(L, seeded(L * 13)); pg.mode = 'play'; for (let t = 0; t < 40000 && pg.mode === 'play'; t++) { pgBot(); pgUpdate(); } if (!pg.won) bad.push('niveau ' + L + ' perdu (' + pg.kills + ' vaincus, vague ' + pg.wi + '/' + pg.waves.length + ')'); }
   pg = null; pgNew(1); pg.rnd = seeded(5); pg.waves = pgWaves(1, seeded(5)); pg.mode = 'play'; for (let t = 0; t < 40000 && pg.mode === 'play'; t++) pgUpdate();
   if (pg.won || pg.cats.every(c => c === 1)) bad.push('sans plantes, pas perdu');
   pg = null; pgNew(1); pg.money = 10; if (pgPlant('radis', 1, 1)) bad.push('planté sans graines');
