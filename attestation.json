@@ -1,9 +1,9 @@
 {
   "pluginId": "neodex.potager",
   "repo": "NDesumeur/neodex-plugin-potager",
-  "version": "1.1.0",
-  "sha256": "5a9cc64212a9da07bdad54994ec9d6d2a820bc3bc9884405c74e5c619119356c",
-  "approvedAt": "2026-11-16T04:14:38.852Z",
+  "version": "1.1.1",
+  "sha256": "d4624bf4b19de2777854c539995d26637bd03527c22abd854d01efa54b117827",
+  "approvedAt": "2026-11-16T16:38:51.034Z",
   "neobase": ">=4.0.0",
-  "signature": "7uN5rs80sbA0gzqtFY8MCNflQli0xUpZ/Cve8c/KznzOWaAGcazkA+q9CbWsn91pOE23LRVqsuDYaphMy2guBg=="
+  "signature": "cHEmAIa5T6/rk61Zyg08zg5X4bCzxfPzoNmh7ojj1O2/riPgoxq+IusVBx62Ansxcvd+Hf1GMPAZfQraP7TFBg=="
 }
