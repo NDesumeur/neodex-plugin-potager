@@ -76,7 +76,6 @@
  "Potager": "Veggie Patch",
  "RECORDS": "BESTS",
  "Radis": "Radish",
- "Record.": "Best.",
  "Tournesol": "Sunflower",
  "Tous les niveaux sont finis !": "All levels done!",
  "Trèfle": "Clover",
@@ -90,5 +89,6 @@
  "sans plantes, pas perdu": "no plants, not lost",
  "Été": "Summer",
  ": le tournesol arrive": ": the sunflower is coming",
- ": la citrouille arrive": ": the pumpkin is coming"
+ ": la citrouille arrive": ": the pumpkin is coming",
+ "Rien n'est synchronisé : tes records restent sur cet appareil.": "Nothing is synced: your records stay on this device."
 }
