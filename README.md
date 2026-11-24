@@ -43,6 +43,14 @@ Le bouton **Plein écran** agrandit le jardin à tout l'écran (Échap pour en s
 
 Chaque niveau finit par une **grande vague**. Un **chat** garde chaque rangée : il chasse tout le monde une seule fois. Si un nuisible passe une rangée sans chat, le potager est envahi.
 
+## Mini-jeux (nouveau en 1.2.0)
+
+Trois mini-jeux aux règles différentes, à lancer depuis la carte **MINI-JEUX** de la colonne (NOUVELLE PARTIE ramène aux niveaux). Les gagner ne fait pas avancer les niveaux ; la carte compte combien de fois chacun a été gagné.
+
+- **Bowling de choux** : pas de graines ni de plantes. Une file de choux se remplit en haut ; clique une case **avant la ligne rouge** (ou Entrée) pour lancer le premier. Le chou roule vers la droite, frappe le premier nuisible et **rebondit** sur une rangée voisine pour en frapper d'autres (×2, ×3…). Un **chou rouge** explose sur les trois rangées autour de lui. Les corbeaux ne viennent pas.
+- **Tapis de graines** : plus de graines à dépenser. Les plantes (radis, chou, piment, ortie, citrouille) arrivent au hasard sur un tapis en haut ; choisis-en une (clic ou 1 à 7), puis une case. La pelle reste là pour faire de la place.
+- **Potager la nuit** : rien ne tombe du ciel, tu commences avec 150 graines, et le jardin est noir : on ne voit qu'autour du curseur, des plantes et des tirs. Les yeux des nuisibles brillent dans le noir.
+
 ## Statistiques
 
 Le panneau Records garde le **niveau atteint**, les **niveaux gagnés**, les **nuisibles vaincus** et le nombre de **parties**. Le jeu reprend au niveau atteint.

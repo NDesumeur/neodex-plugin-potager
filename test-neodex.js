@@ -41,6 +41,18 @@ module.exports = async ({ pj, sleep }) => {
     await shot(L === 14 ? '4-automne' : '5-hiver');
   }
   if (seasons.join() !== 'automne,hiver') throw new Error('saisons : ' + seasons);
+  // les mini-jeux (1.2.0) : le bouton du panneau lance le bowling, un chou lancé roule ; le tapis donne des plantes sans graines ; la nuit cache le jardin
+  const nb = await pj("document.querySelectorAll('#pgMinis .btn').length"); if (nb !== 3) throw new Error('trois mini-jeux attendus : ' + nb);
+  await pj("document.querySelectorAll('#pgMinis .btn')[0].click(), 0"); await sleep(300); await shot('6-bowling-depart');
+  if (!/mini-jeu Bowling de choux/.test(await label())) throw new Error('le bowling devait démarrer : ' + await label());
+  await key(' '); await C('T.st().balls = ["chou", "boom", "chou", "chou"]; T.st().t = 1500; return 0;'); await sleep(2500);
+  const rolled = await C('const pg = T.st(); return [T.roll(1, 1), T.roll(0, 2), T.roll(5, 3)].join(",");'); if (rolled !== 'true,true,false') throw new Error('lancers : ' + rolled);
+  await sleep(1400); await shot('7-bowling');
+  await C('T.nw(9, "tapis"); return 0;'); await key(' '); await C('const pg = T.st(); pg.cards = ["radis", "chou", "piment"]; pg.sel = 1; pg.cur = [5, 2]; return 0;'); cur = [5, 2]; await key('Enter'); await sleep(200);
+  const tp = await C('const pg = T.st(); return pg.plants.map(p => p.k).join() + "|" + pg.cards.join();'); if (tp !== 'chou|radis,piment') throw new Error('tapis : ' + tp);
+  await sleep(1500); await shot('8-tapis');
+  await C('T.nw(7, "nuit"); return 0;'); await key(' '); await C('const pg = T.st(); pg.money = 300; pg.cur = [1, 2]; return 0;'); cur = [1, 2]; await plant(2, 1, 2); await sleep(5000); await shot('9-nuit');
+  if (await C('return T.st().sky;') < 1e8) throw new Error('la nuit, rien ne doit tomber du ciel');
   const errs = await pj(`window.__e.join(' | ')`); if (errs) throw new Error('erreur : ' + errs);
   await pj(`document.getElementById('pgFs').click(), 0`); await sleep(700);
   const fs = await pj(`(() => { const c = document.getElementById('pgCanvas'), r = c.getBoundingClientRect(); return document.fullscreenElement === c.parentElement && (Math.abs(r.height - innerHeight) < 3 || Math.abs(r.width - innerWidth) < 3); })()`);
@@ -48,5 +60,5 @@ module.exports = async ({ pj, sleep }) => {
   if (!fs) throw new Error('le plein écran ne remplit pas l\'écran');
   const L = await pj(`(() => { const r = document.getElementById('pgCanvas').getBoundingClientRect(); let s = 0; for (let e = document.getElementById('pgCanvas').parentElement; e; e = e.parentElement) s += e.scrollTop; return { bottom: Math.round(r.bottom + s), h: Math.round(r.height), wh: innerHeight, ww: innerWidth, sw: document.documentElement.scrollWidth }; })()`);
   if (L.bottom > L.wh + 1 || L.sw > L.ww + 1 || L.h < 300) throw new Error('le jeu dépasse la fenêtre ou reste petit : ' + JSON.stringify(L));
-  return l + ' · automne et hiver, tournesol et citrouille · plein écran · ' + L.h + ' px dans ' + L.ww + '×' + L.wh;
+  return l + ' · automne et hiver, tournesol et citrouille · trois mini-jeux · plein écran · ' + L.h + ' px dans ' + L.ww + '×' + L.wh;
 };

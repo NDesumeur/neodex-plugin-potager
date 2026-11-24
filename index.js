@@ -5,11 +5,15 @@ const HTML = `<div class="appWrap wide">
   <div class="gMain"><div class="gameBox"><canvas id="pgCanvas" width="276" height="160" role="img" aria-label="Potager"></canvas></div>
     <div class="gSide">
       <div class="sysCard"><b>RECORDS</b><div class="gStats" id="pgStats"></div></div>
+      <div class="sysCard"><b>MINI-JEUX</b><div class="pgMinis" id="pgMinis" data-pxskip></div></div>
       <div class="row"><button class="btn main" id="pgNew">NOUVELLE PARTIE</button><button class="btn" id="pgFs">PLEIN ÉCRAN</button></div>
-      <div class="hint">Des limaces, escargots, corbeaux, taupes et sangliers traversent le jardin de droite à gauche. Plante avec tes graines : le trèfle en donne, le radis et le piment tirent, le chou bloque le passage et l'ortie pique ce qui marche dessus. Ramasse les graines qui tombent en cliquant dessus. Les corbeaux volent au-dessus des plantes, les taupes creusent dessous jusqu'au milieu. Un chat garde chaque rangée, une seule fois. 10 niveaux.</div>
+      <div class="hint">Des limaces, escargots, corbeaux, taupes et sangliers traversent le jardin de droite à gauche. Plante avec tes graines : le trèfle en donne, le radis et le piment tirent, le chou bloque le passage et l'ortie pique ce qui marche dessus. Ramasse les graines qui tombent en cliquant dessus. Les corbeaux volent au-dessus des plantes, les taupes creusent dessous jusqu'au milieu. Un chat garde chaque rangée, une seule fois. 10 niveaux, et trois mini-jeux aux règles différentes.</div>
     </div></div>
 </div>`;
 const CSS = `.gMain{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
+.pgMinis{display:grid;gap:6px}
+.pgMinis .btn{flex-direction:column;align-items:flex-start;text-align:left;height:auto;padding:4px 10px 8px}
+.pgMinis .btn small{font-size:13px;opacity:.85}
 .gameBox{display:grid;place-items:center;padding:10px;background:#05010b;flex:1 1 360px;min-width:min(100%,320px);position:relative}
 .gameBox:fullscreen{padding:0}
 .gameBox:fullscreen canvas{width:min(100vw,calc(100vh * 276 / 160))}
@@ -358,8 +362,14 @@ const PG_THEME = [
 const PG_PESTS = {limace: {hp: 60, spd: .13, bite: .4, from: 1}, escargot: {hp: 150, spd: .09, bite: .4, from: 3}, corbeau: {hp: 45, spd: .32, bite: 0, fly: 1, from: 4},
   taupe: {hp: 90, spd: .26, bite: .5, dig: 1, from: 6}, sanglier: {hp: 340, spd: .17, bite: 1.2, from: 8}};
 // les vagues d'un niveau : de plus en plus de nuisibles, de plus en plus serrés, et une grande vague à la fin
-function pgWaves(L, r) {
-  const n = 6 + L * 3 - (L > 8 ? L - 8 : 0) * 2, types = Object.keys(PG_PESTS).filter(k => PG_PESTS[k].from <= L), out = [];
+const PG_MINI = {  // L : les nuisibles de quel niveau
+  bowling: {name: 'Bowling de choux', L: 6, desc: 'lance des choux qui rebondissent', rule: 'Clique une case avant la ligne rouge', rule2: 'Le chou roule et rebondit · rouge : il explose'},
+  tapis: {name: 'Tapis de graines', L: 9, desc: 'les plantes arrivent toutes seules', rule: 'Pas de graines : les plantes arrivent au hasard', rule2: 'Choisis-en une sur le tapis, puis une case'},
+  nuit: {name: 'Potager la nuit', L: 7, desc: 'il fait noir, rien ne tombe du ciel', rule: 'La nuit : rien ne tombe du ciel', rule2: 'Tu ne vois qu’autour du curseur et des plantes'},
+};
+const PG_FEED = {radis: 3, chou: 2, piment: 2, ortie: 1, citrouille: 1};  // ce que le tapis apporte (poids)
+function pgWaves(L, r, noFly) {
+  const n = 6 + L * 3 - (L > 8 ? L - 8 : 0) * 2, types = Object.keys(PG_PESTS).filter(k => PG_PESTS[k].from <= L && !(noFly && PG_PESTS[k].fly)), out = [];
   let t = 1000;
   for (let i = 0; i < n; i++) {
     const big = i >= Math.floor(n * .7);
@@ -370,19 +380,24 @@ function pgWaves(L, r) {
   }
   return out;
 }
-function pgNew(L = pgs.level) {
+function pgNew(L = pgs.level, mini = null) {
   const g = pg?.g, rnd = seeded(Date.now() % 1e9 + L);
-  pg = renew(pg, {g, mode: 'ready', tick: 0, seen: 0, t: 0, L, rnd, money: 75, plants: [], pests: [], shots: [], drops: [], fx: [], cats: Array(PG.ROWS).fill(1),
-    waves: pgWaves(L, rnd), wi: 0, sel: 0, cur: [1, 2], wait: {}, sky: 400, banner: 0, dead: 0, won: 0, kills: 0, shovel: false});
+  pg = renew(pg, {g, mode: 'ready', tick: 0, seen: 0, t: 0, L, rnd, mini, balls: [], rolls: [], cards: [], feed: 60, money: mini === 'nuit' ? 150 : 75, plants: [], pests: [], shots: [], drops: [], fx: [], cats: Array(PG.ROWS).fill(1),
+    waves: pgWaves(L, rnd, mini === 'bowling'), wi: 0, sel: 0, cur: [1, 2], wait: {}, sky: mini ? 1e9 : 400, banner: 0, dead: 0, won: 0, kills: 0, shovel: false});
   pgInfo();
 }
 const pgAt = (c, r) => pg.plants.find(p => p.c === c && p.r === r);
 const pgUnlocked = k => PG_PLANTS[k].from <= pg.L;
-const pgCanPlant = (k, c, r) => pgUnlocked(k) && pg.money >= PG_PLANTS[k].cost && !(pg.wait[k] > 0) && c >= 0 && c < PG.COLS && r >= 0 && r < PG.ROWS && !pgAt(c, r);
+const pgSelK = () => pg.mini === 'tapis' ? pg.cards[pg.sel] : PG_KEYS[pg.sel];  // la plante choisie (sur le tapis : la carte choisie)
+const pgCanPlant = (k, c, r) => (pg.mini === 'tapis' ? !!k && pg.cards[pg.sel] === k : pg.mini !== 'bowling' && pgUnlocked(k) && pg.money >= PG_PLANTS[k].cost && !(pg.wait[k] > 0)) && c >= 0 && c < PG.COLS && r >= 0 && r < PG.ROWS && !pgAt(c, r);
 function pgPlant(k, c, r) {
   if (!pgCanPlant(k, c, r)) { pgBeep(140, .08); return false; }
-  const P = PG_PLANTS[k]; pg.money -= P.cost; pg.wait[k] = P.wait;
+  const P = PG_PLANTS[k]; if (pg.mini === 'tapis') { pg.cards.splice(pg.sel, 1); pg.sel = Math.max(0, Math.min(pg.sel, pg.cards.length - 1)); } else { pg.money -= P.cost; pg.wait[k] = P.wait; }
   pg.plants.push({k, c, r, hp: P.hp, cd: P.make ? 200 : 20, f: pg.rnd() * 30 | 0}); pgBeep(520, .06, 'triangle', 780); return true;
+}
+function pgRoll(c, r) {  // bowling : lance le premier chou de la file depuis une case avant la ligne rouge
+  if (pg.mini !== 'bowling' || !pg.balls.length || c < 0 || c > 2 || r < 0 || r >= PG.ROWS) { pgBeep(140, .08); return false; }
+  pg.rolls.push({r, x: pgPx(c) + 12, y: pgPy(r) + 12, boom: pg.balls.shift() === 'boom', hits: 0, a: 0, cool: 0}); pgBeep(330, .08, 'triangle', 200); return true;
 }
 function pgDig(c, r) { const p = pgAt(c, r); if (p) { pg.plants.splice(pg.plants.indexOf(p), 1); pgBeep(220, .08, 'square', 120); } }
 const pgPx = c => PG.X0 + c * PG.C, pgPy = r => PG.Y0 + r * PG.C;
@@ -397,6 +412,20 @@ function pgUpdate() {
     if (w.big && !pg.waves[pg.wi - 2]?.big) { pg.banner = 150; pgBeep(160, .5, 'sawtooth', 320, .05); }
     pg.pests.push({type: w.type, r: w.row, x: PG.W + 4 + pg.rnd() * 8, hp, max: hp, dig: !!P.dig, hit: 0, f: pg.rnd() * 30 | 0, eat: 0});
   }
+  // les mini-jeux : la file de choux ou le tapis de plantes se remplit ; les choux roulent, frappent et rebondissent
+  if ((pg.mini === 'bowling' || pg.mini === 'tapis') && --pg.feed <= 0) {
+    pg.feed = pg.mini === 'bowling' ? 170 : 260; const list = pg.mini === 'bowling' ? pg.balls : pg.cards;
+    if (list.length < 7) { if (pg.mini === 'bowling') list.push(pg.rnd() < .17 ? 'boom' : 'chou'); else { const tot = Object.values(PG_FEED).reduce((a, b) => a + b); let x = pg.rnd() * tot; list.push(Object.keys(PG_FEED).find(k => (x -= PG_FEED[k]) < 0) || 'radis'); } }
+  }
+  for (const b of pg.rolls) {
+    b.x += 1.7; b.a++; const ty = pgPy(b.r) + 12; b.y += Math.sign(ty - b.y) * Math.min(1.4, Math.abs(ty - b.y)); if (b.cool > 0) b.cool--;
+    const e = !b.cool && pg.pests.find(e => e.r === b.r && !e.gone && !e.dig && !PG_PESTS[e.type].fly && Math.abs(e.x - b.x) < 9);
+    if (e && b.boom) { for (const o of pg.pests) if (Math.abs(o.r - b.r) <= 1 && Math.abs(o.x - b.x) < 30 && !o.dig) { o.hp -= 500; o.hit = 5; } pg.fx.push({k: 'puff', x: b.x, y: b.y, t: 14}, {k: 'puff', x: b.x, y: b.y - 14, t: 12}, {k: 'puff', x: b.x, y: b.y + 14, t: 12}); b.gone = 1; pgBeep(120, .3, 'sawtooth', 60, .04); }
+    else if (e) { e.hp -= 100; e.hit = 5; b.hits++; b.cool = 10; b.r = b.r === 0 ? 1 : b.r === PG.ROWS - 1 ? b.r - 1 : b.r + (pg.rnd() < .5 ? -1 : 1);  // il rebondit sur une rangée voisine
+      if (b.hits > 1) pg.fx.push({k: 'txt', x: b.x, y: b.y - 6, t: 30, s: '×' + b.hits}); pgBeep(400 + b.hits * 80, .06, 'square', 0, .02); }
+    if (b.x > PG.W + 12) b.gone = 1;
+  }
+  pg.rolls = pg.rolls.filter(b => !b.gone);
   // les graines tombent du ciel de temps en temps
   if (--pg.sky <= 0) { pg.sky = 600; pg.drops.push({x: PG.X0 + 10 + pg.rnd() * (PG.COLS * PG.C - 20), y: PG.Y0 - 10, ty: PG.Y0 + 10 + pg.rnd() * (PG.ROWS * PG.C - 24), t: 0}); }
   for (const d of pg.drops) { if (d.y < d.ty) d.y += .5; d.t++; if (d.t > 420) pgCollect(d); }  // ramassées toutes seules au bout de 7 s, plus vite en cliquant
@@ -441,13 +470,20 @@ function pgUpdate() {
 }
 function pgEnd(win) {
   pg.mode = 'over'; pg.won = win; pg.dead = 0; pgs.games++; pgs.kills += pg.kills;
-  if (win) { pgs.wins++; best('potager', pg.L); if (pg.L >= pgs.level) pgs.level = Math.min(PG.MAX, pg.L + 1); }
+  if (win && pg.mini) pgs.minis = {...(pgs.minis || {}), [pg.mini]: (pgs.minis?.[pg.mini] || 0) + 1};  // un mini-jeu gagné ne fait pas avancer les niveaux
+  else if (win) { pgs.wins++; best('potager', pg.L); if (pg.L >= pgs.level) pgs.level = Math.min(PG.MAX, pg.L + 1); }
   saveGames(); pgInfo();
   (win ? [523, 659, 784, 1047] : [392, 330, 262, 196]).forEach((f, i) => setTimeout(() => pgBeep(f, .16, 'triangle'), i * 130));
 }
 /* ---------- le dessin ---------- */
 function pgSpr(g, key, frame, x, y, pal) { const S = PG_SPR[key]; sprite(g, S.f[frame % S.f.length], Math.round(x), Math.round(y), pal || S.pal); }
 const pgWhite = key => Object.fromEntries(Object.keys(PG_SPR[key].pal).map(k => [k, k === 'k' ? PG_SPR[key].pal.k : '#ffffff']));
+let pgDark = null;
+const PG_RED = Object.fromEntries(Object.entries(PG_SPR.chou.pal).map(([k, v], i) => [k, k === 'k' || k === 'e' ? v : ['#ff8a6a', '#e84a3a', '#a82a1a', '#ffc8b0', '#fff0e8'][i % 5]]));
+function pgBall(g, x, y, boom, a) {  // un chou (rouge : il explose), qui roule en sautillant
+  pgSpr(g, 'chou', 0, x - 8, y - 9 - (a >> 3) % 2, boom ? PG_RED : null);
+  if (boom) { px(g, '#3a2a1a', x, y - 11, 1, 3); px(g, (a >> 2) % 2 ? '#ffd84a' : '#ff6a2a', x, y - 12, 1, 1); }
+}
 function pgDraw() {
   const g = pg.g, {W, H, X0, Y0, C, COLS, ROWS} = PG;
   for (; pg.seen < pg.tick; pg.seen++) if (pg.mode === 'over') pg.dead++;
@@ -471,7 +507,7 @@ function pgDraw() {
   px(g, '#a87a4a', 13, Y0 + 2, 5, 1); px(g, '#a87a4a', 13, Y0 + ROWS * C - 6, 5, 1);
   for (let r = 0; r < ROWS; r++) { const cat = pg.cats[r]; if (cat === 1) pgSpr(g, 'chat', (pg.t >> 5) % 2, 2, pgPy(r) + 8); else if (cat) pgSpr(g, 'chat', (pg.t >> 2) % 2, cat.x, pgPy(r) + 8); }
   // la case visée (clavier ou souris)
-  if (pg.mode !== 'over') { const [c, r] = pg.cur, x = pgPx(c), y = pgPy(r), ok = pg.shovel ? !!pgAt(c, r) : pgCanPlant(PG_KEYS[pg.sel], c, r), col = ok ? '#ffffff' : '#ff6a5a';
+  if (pg.mode !== 'over') { const [c, r] = pg.cur, x = pgPx(c), y = pgPy(r), ok = pg.shovel ? !!pgAt(c, r) : pg.mini === 'bowling' ? c <= 2 && pg.balls.length > 0 : pgCanPlant(pgSelK(), c, r), col = ok ? '#ffffff' : '#ff6a5a';
     for (let i = 0; i < C; i += 2) { px(g, col, x + i, y, 1, 1); px(g, col, x + i, y + C - 1, 1, 1); px(g, col, x, y + i, 1, 1); px(g, col, x + C - 1, y + i, 1, 1); } }
   const ents = [];
   for (const p of pg.plants) ents.push([p.r, 0, () => { const a = p.f >> 4, flash = p.hpFlash; pgSpr(g, p.k, p.k === 'radis' || p.k === 'piment' ? (p.shoot > 0 ? (p.shoot--, 1) : 0) : a, pgPx(p.c) + 4, pgPy(p.r) + 4);
@@ -483,6 +519,8 @@ function pgDraw() {
     pgSpr(g, e.type, e.eat ? (e.f >> 3) : (e.f >> 4), x, y + (e.eat && (e.f >> 3) % 2 ? 1 : 0), e.hit > 2 ? pgWhite(e.type) : null);
   }]);
   for (const [, , fn] of ents.sort((a, b) => a[0] - b[0] || a[1] - b[1])) fn();
+  for (const b of pg.rolls) pgBall(g, b.x, b.y, b.boom, b.a);
+  if (pg.mini === 'bowling') for (let y = Y0; y < Y0 + ROWS * C; y += 4) px(g, '#e84a3a', pgPx(3), y, 1, 2);  // la ligne rouge : on lance avant
   for (const s of pg.shots) { if (s.fire) { px(g, '#ff4a2a', s.x - 3, s.y - 1, 4, 3); px(g, '#ffd84a', s.x - 1, s.y, 2, 1); px(g, '#ff8a2a', s.x - 6, s.y, 3, 1); } else { px(g, '#1a1408', s.x - 1, s.y - 1, 4, 4); px(g, '#f0f0d0', s.x, s.y, 2, 2); } }
   for (const f of pg.fx) {
     if (f.k === 'pop') { px(g, f.c, f.x - 2, f.y - 2, 1, 1); px(g, f.c, f.x + 2, f.y - 2, 1, 1); px(g, f.c, f.x - 2, f.y + 2, 1, 1); px(g, f.c, f.x + 2, f.y + 2, 1, 1); }
@@ -490,14 +528,29 @@ function pgDraw() {
     if (f.k === 'dirt') for (let i = 0; i < 6; i++) px(g, '#5a3e22', f.x - 6 + i * 2, f.y - (16 - f.t) * (i % 3 + 1) * .4, 2, 2);
     if (f.k === 'txt') pxFont(g, f.s, f.x, f.y - (30 - f.t) * .4, '#ffd84a', 8, 'center');
   }
+  if (pg.mini === 'nuit') {  // la nuit : du noir partout, sauf autour du curseur, des plantes et des tirs ; les yeux des nuisibles brillent
+    pgDark ??= Object.assign(document.createElement('canvas'), {width: W, height: H}); const m = pgDark.getContext('2d');
+    m.globalCompositeOperation = 'source-over'; m.clearRect(0, 0, W, H); m.fillStyle = 'rgba(6,8,28,.88)'; m.fillRect(0, 28, W, H - 28); m.globalCompositeOperation = 'destination-out';
+    const hole = (x, y, r) => { m.beginPath(); m.arc(x, y, r, 0, Math.PI * 2); m.fill(); };
+    hole(pgPx(pg.cur[0]) + 12, pgPy(pg.cur[1]) + 12, 30); for (const p of pg.plants) hole(pgPx(p.c) + 12, pgPy(p.r) + 12, 11); for (const s of pg.shots) hole(s.x, s.y, 7);
+    m.globalCompositeOperation = 'source-over'; g.drawImage(pgDark, 0, 0);
+    for (const e of pg.pests) if (!e.dig) { const y = pgPy(e.r) + C - 12 - (PG_PESTS[e.type].fly ? 6 : 0); px(g, '#ffe04a', e.x - 4, y, 1, 1); px(g, '#ffe04a', e.x - 1, y, 1, 1); }
+    px(g, '#e8e8c0', W - 22, 32, 6, 6); px(g, '#06081c', W - 20, 31, 5, 5);  // la lune
+  }
   // ce qui tombe du ciel : des feuilles en automne, des flocons en hiver (sans mémoire : leur place se calcule depuis l'heure du jeu)
   if (SE) for (let i = 0; i < 26; i++) { const v = .25 + (i % 4) * .08, x = ((i * 47 + Math.sin((pg.tick + i * 40) / 30) * 6 - pg.tick * v * (SE === 1 ? .6 : .2)) % W + W) % W, y = (i * 61 + pg.tick * v) % (H - 28) + 28;
     if (SE === 1) { px(g, ['#e8742a', '#c8402a', '#e8b02a', '#a8602a'][i % 4], x, y, 2, 1); px(g, '#6a3a1a', x + (i % 2), y + 1, 1, 1); } else px(g, '#ffffff', x, y, i % 3 ? 1 : 2, i % 3 ? 1 : 2); }
   for (const d of pg.drops) sprite(g, d.v > 25 ? PG_SEED_BIG : PG_SEED.f, Math.round(d.x - 4), Math.round(d.y - 4 + (d.y >= d.ty ? Math.round(Math.sin(d.t / 8)) : 0)), PG_SEED.pal);
   // le haut : les graines et les cartes des plantes
   px(g, '#5a3e22', 0, 0, W, 28); px(g, '#7a5634', 0, 0, W, 1); px(g, '#3a2614', 0, 27, W, 1);
-  sprite(g, PG_SEED.f, 4, 4, PG_SEED.pal); pxFont(g, String(pg.money), 18, 20, '#ffd84a', 8, 'center');
-  PG_KEYS.forEach((k, i) => {
+  if (pg.mini !== 'bowling' && pg.mini !== 'tapis') { sprite(g, PG_SEED.f, 4, 4, PG_SEED.pal); pxFont(g, String(pg.money), 18, 20, '#ffd84a', 8, 'center'); }
+  if (pg.mini === 'bowling' || pg.mini === 'tapis') {  // la file des choux, ou le tapis des plantes
+    const list = pg.mini === 'bowling' ? pg.balls : pg.cards;
+    for (let i = 0; i < 7; i++) { const x = PG.CX + i * PG.CW, k = list[i], on = k && i === (pg.mini === 'tapis' ? pg.sel : 0) && !pg.shovel;
+      px(g, on ? '#ffd84a' : '#2a1a0a', x, 2, 24, 24); px(g, k ? '#e8d8b0' : '#4a3a2a', x + 1, 3, 22, 22); if (!k) continue;
+      if (pg.mini === 'bowling') pgBall(g, x + 12, 22, k === 'boom', 0); else sprite(g, PG_SPR[k].f[0], x + 4, 4, PG_SPR[k].pal); }
+    pxFont(g, pg.mini === 'bowling' ? 'choux' : 'tapis', 16, 18, '#e8d8b0', 8, 'center');
+  } else PG_KEYS.forEach((k, i) => {
     const x = PG.CX + i * PG.CW, on = pg.sel === i && !pg.shovel, P = PG_PLANTS[k], open = pgUnlocked(k);
     px(g, on ? '#ffd84a' : '#2a1a0a', x, 2, 24, 24); px(g, open ? '#e8d8b0' : '#6a5a4a', x + 1, 3, 22, 22);
     if (!open) { sprite(g, ['..kkk..', '.k...k.', '.k...k.', 'kkkkkkk', 'kyyyyyk', 'kyykyyk', 'kyyyyyk', 'kkkkkkk'], x + 8, 4, {k: '#3a2a1a', y: '#c8a04a'}); pxFont(g, String(P.from), x + 12, 23, '#3a2a1a', 8, 'center'); return; }
@@ -507,54 +560,62 @@ function pgDraw() {
     else if (dim) px(g, 'rgba(26,20,8,.35)', x + 1, 3, 22, 22);
     px(g, '#3a2a1a', x + 1, 18, 22, 7); pxFont(g, String(P.cost), x + 12, 24, pg.money >= P.cost ? '#ffd84a' : '#ff6a5a', 8, 'center');
   });
-  { const x = PG_SHOVEL, on = pg.shovel; px(g, on ? '#ffd84a' : '#2a1a0a', x, 2, 22, 24); px(g, '#e8d8b0', x + 1, 3, 20, 22);
+  if (pg.mini !== 'bowling') { const x = PG_SHOVEL, on = pg.shovel; px(g, on ? '#ffd84a' : '#2a1a0a', x, 2, 22, 24); px(g, '#e8d8b0', x + 1, 3, 20, 22);
     sprite(g, ['....kk', '...kBk', '..kBk.', '.kBk..', 'kggk..', 'kgggk.', 'kggk..', '.kk...'].map(r => '..' + r), x + 4, 8, {k: '#1a1408', B: '#8a5a3a', g: '#a8a8b8'}); }
   pxFont(g, 'Niv ' + pg.L, W - 3, 12, '#ffffff', 8, 'right');
   const done = pg.waves.length ? pg.waves.filter((w, i) => i < pg.wi).length / pg.waves.length : 0;
   px(g, '#2a1a0a', W - 38, 17, 35, 5); px(g, '#7ae05a', W - 37, 18, Math.round(33 * done), 3);
   if (pg.banner) gameText(g, W, [['GRANDE VAGUE !', (pg.banner >> 3) % 2 ? '#ff4a3a' : '#ffd84a', 12]], 90);
-  if (pg.mode === 'ready') gameText(g, W, [['POTAGER · NIVEAU ' + pg.L, '#ffd84a', 12], [PG_SEASONS[SE] + (pg.L === 11 ? ' : le tournesol arrive' : pg.L === 13 ? ' : la citrouille arrive' : ''), T.title], ['Choisis une plante, puis une case', '#ffffff'], ['Garde les nuisibles loin de la maison !', '#c8f0a8'], ['Espace : commencer', '#b8b0c8']], 58);
+  if (pg.mode === 'ready' && pg.mini) { const M = PG_MINI[pg.mini]; gameText(g, W, [['MINI-JEU', '#c8f0a8'], [M.name.toUpperCase(), '#ffd84a', 12], [M.rule, '#ffffff'], [M.rule2, '#c8f0a8'], ['Espace : commencer', '#b8b0c8']], 64); }
+  else if (pg.mode === 'ready') gameText(g, W, [['POTAGER · NIVEAU ' + pg.L, '#ffd84a', 12], [PG_SEASONS[SE] + (pg.L === 11 ? ' : le tournesol arrive' : pg.L === 13 ? ' : la citrouille arrive' : ''), T.title], ['Choisis une plante, puis une case', '#ffffff'], ['Garde les nuisibles loin de la maison !', '#c8f0a8'], ['Espace : commencer', '#b8b0c8']], 58);
   if (pg.mode === 'pause') gameText(g, W, [['PAUSE', '#ffd84a', 12], ['Entrée : reprendre', '#b8b0c8']], 80);
-  if (pg.mode === 'over' && pg.dead > 30) gameText(g, W, pg.won ? [['JARDIN SAUVÉ !', '#7ae05a', 12], ['Niveau ' + pg.L + ' fini, ' + pg.kills + ' nuisibles', '#ffffff'], [pg.L < PG.MAX ? (pg.dead > 60 ? 'Espace : niveau suivant' : '') : 'Tous les niveaux sont finis !', '#ffd84a']]
+  if (pg.mode === 'over' && pg.dead > 30 && pg.mini) gameText(g, W, [[pg.won ? 'MINI-JEU GAGNÉ !' : 'LE POTAGER EST ENVAHI', pg.won ? '#7ae05a' : '#ff4a3a', 12], [PG_MINI[pg.mini].name + ', ' + pg.kills + ' nuisibles', '#ffffff'], [pg.dead > 60 ? 'Espace : rejouer' : '', '#b8b0c8']], 72);
+  else if (pg.mode === 'over' && pg.dead > 30) gameText(g, W, pg.won ? [['JARDIN SAUVÉ !', '#7ae05a', 12], ['Niveau ' + pg.L + ' fini, ' + pg.kills + ' nuisibles', '#ffffff'], [pg.L < PG.MAX ? (pg.dead > 60 ? 'Espace : niveau suivant' : '') : 'Tous les niveaux sont finis !', '#ffd84a']]
     : [['LE POTAGER EST ENVAHI', '#ff4a3a', 12], ['Niveau ' + pg.L + ', ' + pg.kills + ' nuisibles', '#ffffff'], [pg.dead > 60 ? 'Espace : recommencer' : '', '#b8b0c8']], 72);
   if (pg.tick % 15 === 0) {
     const [c, r] = pg.cur, here = pgAt(c, r);
-    g.canvas.setAttribute('aria-label', 'Potager, niveau ' + pg.L + ' : ' + pg.money + ' graines, ' + PG_SEASONS[SE].toLowerCase() + ', plante choisie ' + (pg.shovel ? 'pelle' : PG_PLANTS[PG_KEYS[pg.sel]].name) + ', case colonne ' + (c + 1) + ' rangée ' + (r + 1) + (here ? ' (' + PG_PLANTS[here.k].name + ')' : '') +
+    g.canvas.setAttribute('aria-label', 'Potager, niveau ' + pg.L + ' : ' + pg.money + ' graines, ' + PG_SEASONS[SE].toLowerCase() + ', plante choisie ' + (pg.shovel ? 'pelle' : pg.mini === 'bowling' ? (pg.balls.length ? pg.balls.length + ' choux' : 'aucun chou') : PG_PLANTS[pgSelK()]?.name || 'aucune') + (pg.mini ? ', mini-jeu ' + PG_MINI[pg.mini].name : '') + ', case colonne ' + (c + 1) + ' rangée ' + (r + 1) + (here ? ' (' + PG_PLANTS[here.k].name + ')' : '') +
       ', ' + pg.plants.length + ' plantes, ' + pg.pests.length + ' nuisibles, ' + pg.kills + ' vaincus' + (pg.mode === 'over' ? (pg.won ? ', gagné' : ', perdu') : '') + '.');
   }
 }
 function pgInfo() {
+  $('pgMinis').replaceChildren(...Object.entries(PG_MINI).map(([k, M]) => { const b = el('button', 'btn' + (pg?.mini === k ? ' main' : '')), n = pgs.minis?.[k] || 0;
+    b.append(el('span', '', M.name), el('small', '', M.desc + (n ? ' · gagné ' + n + ' fois' : ''))); b.onclick = () => { pgNew(M.L, k); b.blur(); }; return b; }));
   $('pgStats').replaceChildren(...[['Niveau atteint', pgs.level], ['Niveaux gagnés', pgs.wins], ['Nuisibles vaincus', pgs.kills], ['Parties', pgs.games]].flatMap(([a, c]) => [el('span', '', a), el('b', '', String(c))]));
 }
 document.addEventListener('keydown', e => {
   if (!view.classList.contains('on') || !pg || /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
   const k = e.key;
-  if (pg.mode === 'over') { if ((k === ' ' || k === 'Enter') && pg.dead > 60) { e.preventDefault(); pgNew(pg.won ? Math.min(PG.MAX, pg.L + 1) : pg.L); } return; }
+  if (pg.mode === 'over') { if ((k === ' ' || k === 'Enter') && pg.dead > 60) { e.preventDefault(); pg.mini ? pgNew(pg.L, pg.mini) : pgNew(pg.won ? Math.min(PG.MAX, pg.L + 1) : pg.L); } return; }
   if (k === 'p' || k === 'P' || k === 'Escape') { if (pg.mode === 'play') pg.mode = 'pause'; else if (pg.mode === 'pause') pg.mode = 'play'; return; }
   const mv = {ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1]}[k];
   if (mv) { e.preventDefault(); pg.cur = [Math.max(0, Math.min(PG.COLS - 1, pg.cur[0] + mv[0])), Math.max(0, Math.min(PG.ROWS - 1, pg.cur[1] + mv[1]))]; return; }
   if (/^[1-7]$/.test(k)) { pg.sel = +k - 1; pg.shovel = false; return; }
   if (k === 'x' || k === 'X' || k === '0') { pg.shovel = !pg.shovel; return; }
   if (k === 'c' || k === 'C') { const d = pg.drops.find(d => !d.got); if (d) pgCollect(d); return; }
-  if (k === ' ' || k === 'Enter') { e.preventDefault(); if (pg.mode !== 'play') { pg.mode = 'play'; return; } if (pg.shovel) { pgDig(...pg.cur); pg.shovel = false; } else pgPlant(PG_KEYS[pg.sel], ...pg.cur); }
+  if (k === ' ' || k === 'Enter') { e.preventDefault(); if (pg.mode !== 'play') { pg.mode = 'play'; return; } if (pg.shovel) { pgDig(...pg.cur); pg.shovel = false; } else if (pg.mini === 'bowling') pgRoll(...pg.cur); else pgPlant(pgSelK(), ...pg.cur); }
 });
 { const cv = $('pgCanvas');  // à la souris : une carte, puis une case ; on ramasse les graines en cliquant dessus
   const at = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * PG.W, (e.clientY - r.top) / r.height * PG.H]; };
   cv.onpointermove = e => { if (!pg) return; const [x, y] = at(e), c = Math.floor((x - PG.X0) / PG.C), r = Math.floor((y - PG.Y0) / PG.C); if (c >= 0 && c < PG.COLS && r >= 0 && r < PG.ROWS) pg.cur = [c, r]; };
   cv.onpointerdown = e => { e.preventDefault(); if (!pg) return; const [x, y] = at(e);
-    if (pg.mode === 'over') { if (pg.dead > 60) pgNew(pg.won ? Math.min(PG.MAX, pg.L + 1) : pg.L); return; }
+    if (pg.mode === 'over') { if (pg.dead > 60) pg.mini ? pgNew(pg.L, pg.mini) : pgNew(pg.won ? Math.min(PG.MAX, pg.L + 1) : pg.L); return; }
     if (pg.mode !== 'play') { pg.mode = 'play'; return; }
     const d = pg.drops.find(d => !d.got && Math.abs(d.x - x) < 8 && Math.abs(d.y - y) < 8); if (d) return pgCollect(d);
-    if (y < 28) { const i = Math.floor((x - PG.CX) / PG.CW); if (x >= PG_SHOVEL && x < PG_SHOVEL + 22) pg.shovel = !pg.shovel; else if (i >= 0 && i < PG_KEYS.length && (x - PG.CX) % PG.CW < 24) { pg.sel = i; pg.shovel = false; } return; }
+    if (y < 28) { const i = Math.floor((x - PG.CX) / PG.CW); if (x >= PG_SHOVEL && x < PG_SHOVEL + 22) pg.shovel = !pg.shovel; else if (i >= 0 && i < (pg.mini === 'tapis' ? pg.cards.length : pg.mini === 'bowling' ? 0 : PG_KEYS.length) && (x - PG.CX) % PG.CW < 24) { pg.sel = i; pg.shovel = false; } return; }
     const c = Math.floor((x - PG.X0) / PG.C), r = Math.floor((y - PG.Y0) / PG.C); if (c < 0 || c >= PG.COLS || r < 0 || r >= PG.ROWS) return;
-    pg.cur = [c, r]; if (pg.shovel) { pgDig(c, r); pg.shovel = false; } else pgPlant(PG_KEYS[pg.sel], c, r); };
+    pg.cur = [c, r]; if (pg.shovel) { pgDig(c, r); pg.shovel = false; } else if (pg.mini === 'bowling') pgRoll(c, r); else pgPlant(pgSelK(), c, r); };
 }
-$('pgNew').onclick = () => { pgNew(pg?.L || pgs.level); $('pgNew').blur(); };
+$('pgNew').onclick = () => { pgNew(pg?.mini ? pgs.level : pg?.L || pgs.level); $('pgNew').blur(); };  // depuis un mini-jeu : retour aux niveaux
 $('pgFs').onclick = () => { $('pgFs').blur(); try { document.fullscreenElement ? document.exitFullscreen() : $('pgCanvas').parentElement.requestFullscreen?.().catch(() => {}); } catch {} };
-$('pgCanvas').__pg = {st: () => pg, nw: L => pgNew(L)};
+$('pgCanvas').__pg = {st: () => pg, nw: (L, m) => pgNew(L, m), roll: (c, r) => pgRoll(c, r)};
 // le jardinier automatique de la vérification : des trèfles d'abord, puis des tireurs dans les rangées menacées, des choux devant, des orties, des piments
 function pgBot() {
   for (const d of pg.drops) if (d.t > 60) pgCollect(d);
+  if (pg.mini === 'bowling') { const t = pg.pests.filter(e => !e.dig && !PG_PESTS[e.type].fly && e.x < PG.W - 4).sort((a, b) => a.x - b.x)[0]; if (t && !pg.rolls.some(b => b.r === t.r && b.x < t.x)) pgRoll(1, t.r); return; }
+  if (pg.mini === 'tapis') { const k = pg.cards[0]; if (!k) return; pg.sel = 0;
+    const thr = r => pg.pests.filter(e => e.r === r).length, sh = r => pg.plants.filter(p => p.r === r && PG_PLANTS[p.k].rate).length, rows = [0, 1, 2, 3, 4].sort((a, b) => sh(a) - sh(b) || thr(b) - thr(a));
+    for (const c of {radis: [1, 2, 3, 0], piment: [2, 3, 4, 1], chou: [6, 7, 5], ortie: [5, 4, 7], citrouille: [7, 6, 8]}[k]) for (const r of rows) if (pgPlant(k, c, r)) return; return; }
   const rows = [2, 1, 3, 0, 4], threat = r => pg.pests.filter(e => e.r === r).length, shooters = r => pg.plants.filter(p => p.r === r && PG_PLANTS[p.k].rate).length;
   const tryP = (k, c, r) => pgCanPlant(k, c, r) && pgPlant(k, c, r);
   for (const r of [...rows].sort((a, b) => threat(b) - threat(a))) if (threat(r) && !shooters(r) && (tryP('radis', 1, r) || tryP('radis', 2, r))) return;
@@ -571,6 +632,9 @@ function pgBot() {
   pg = null; pgNew(1); pg.rnd = seeded(5); pg.waves = pgWaves(1, seeded(5)); pg.mode = 'play'; for (let t = 0; t < 40000 && pg.mode === 'play'; t++) pgUpdate();
   if (pg.won || pg.cats.every(c => c === 1)) bad.push('sans plantes, pas perdu');
   pg = null; pgNew(1); pg.money = 10; if (pgPlant('radis', 1, 1)) bad.push('planté sans graines');
+  for (const m of Object.keys(PG_MINI)) { pg = null; pgNew(PG_MINI[m].L, m); pg.rnd = seeded(77); pg.waves = pgWaves(pg.L, seeded(77), m === 'bowling'); pg.mode = 'play'; for (let t = 0; t < 40000 && pg.mode === 'play'; t++) { pgBot(); pgUpdate(); } if (!pg.won) bad.push('mini-jeu ' + m + ' perdu (' + pg.kills + ' vaincus, vague ' + pg.wi + '/' + pg.waves.length + ')'); }
+  pg = null; pgNew(6, 'bowling'); if (pgRoll(1, 1)) bad.push('lancé sans chou'); pg.balls = ['chou']; if (pgRoll(4, 1) || !pgRoll(2, 1) || pg.balls.length) bad.push('ligne rouge du bowling');
+  pg = null; pgNew(9, 'tapis'); pg.money = 0; pg.cards = ['chou']; if (!pgPlant('chou', 4, 2) || pg.cards.length || pgPlant('chou', 5, 2)) bad.push('tapis de graines');
   console.assert(!bad.length, 'potager', bad);
   Object.assign(pgs, JSON.parse(keepS)); if (keepB === undefined) delete games.best.potager; else games.best.potager = keepB;
   pg = keep; pgMute = false;
