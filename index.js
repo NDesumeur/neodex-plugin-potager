@@ -303,6 +303,9 @@ export default async function (ctx) {
   const best = (k, v) => { const b = games.best[k]; if (v > (b ?? 0)) {  // un score nul n'est jamais un record
     games.best[k] = v; saveGames(); return true; } return false; };
   const gstore = (k, init) => (games[k] ??= init);
+  // les trophées de NeoDex (3.4.8 et plus) : succès et records déclarés dans plugin.json ; sur un NeoDex plus ancien, rien ne se passe
+  const trophy = id => { ctx.games?.unlock(id).catch(() => {}); };
+  const trophyRecord = (id, v) => { if (v != null && Number.isFinite(+v)) ctx.games?.record(id, +v).catch(() => {}); };
 function gameLoop(st, appKey, update, draw) {
   cancelAnimationFrame(st.raf);
   const STEP = 1000 / 60; let acc = 0, last = performance.now();
@@ -579,6 +582,7 @@ function pgDraw() {
   }
 }
 function pgInfo() {
+  setTimeout(pgTrophies);
   $('pgMinis').replaceChildren(...Object.entries(PG_MINI).map(([k, M]) => { const b = el('button', 'btn' + (pg?.mini === k ? ' main' : '')), n = pgs.minis?.[k] || 0;
     b.append(el('span', '', M.name), el('small', '', M.desc + (n ? ' · gagné ' + n + ' fois' : ''))); b.onclick = () => { pgNew(M.L, k); b.blur(); }; return b; }));
   $('pgStats').replaceChildren(...[['Niveau atteint', pgs.level], ['Niveaux gagnés', pgs.wins], ['Nuisibles vaincus', pgs.kills], ['Parties', pgs.games]].flatMap(([a, c]) => [el('span', '', a), el('b', '', String(c))]));
@@ -638,6 +642,12 @@ function pgBot() {
   console.assert(!bad.length, 'potager', bad);
   Object.assign(pgs, JSON.parse(keepS)); if (keepB === undefined) delete games.best.potager; else games.best.potager = keepB;
   pg = keep; pgMute = false;
+}
+// les trophées, tirés des statistiques et des records gardés (aussi à l'ouverture : ce qui a été fait avant compte)
+function pgTrophies() {
+  const b = games.best.potager || 0, sig = [b, pgs.wins, pgs.kills].join(); if (sig === pgTrophies.sig) return; pgTrophies.sig = sig;
+  trophyRecord('niveau', b || null);
+  if (pgs.wins >= 1) trophy('premier'); if (b >= 5) trophy('n5'); if (b >= 10) trophy('n10'); if (b >= PG.MAX) trophy('n20'); if (pgs.kills >= 500) trophy('nuisibles');
 }
 ctx.onOpen(() => {
   if (!pg || !pg.g) { pgNew(); pg.g = $('pgCanvas').getContext('2d'); }

@@ -1,7 +1,7 @@
 {
   "id": "neodex.potager",
   "name": "Potager",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "author": "NDesumeur",
   "description": "Jeu de défense en pixel art : sur 5 rangées de potager, plante trèfles, radis, choux, orties et piments pour arrêter limaces, escargots, corbeaux, taupes et sangliers avant qu'ils atteignent la maison. Des graines à ramasser, une grande vague à chaque niveau, un chat par rangée en dernier recours, 20 niveaux de plus en plus durs : l'été, puis l'automne et l'hiver. Tournesol et citrouille en plus, jardin fleuri, plein écran et jeu à la taille de l'écran. Trois mini-jeux aux règles différentes : bowling de choux, tapis de graines, potager la nuit.",
   "icon": "icon.png",
@@ -22,5 +22,41 @@
   "sdk": "2.1.0",
   "permissions": [
     "storage"
+  ],
+  "succes": [
+    {
+      "id": "premier",
+      "nom": "Main verte",
+      "texte": "Sauver un premier potager"
+    },
+    {
+      "id": "n5",
+      "nom": "Jardinier",
+      "texte": "Réussir le niveau 5"
+    },
+    {
+      "id": "n10",
+      "nom": "Maraîcher",
+      "texte": "Réussir le niveau 10"
+    },
+    {
+      "id": "n20",
+      "nom": "Roi du potager",
+      "texte": "Réussir les 20 niveaux",
+      "cache": true
+    },
+    {
+      "id": "nuisibles",
+      "nom": "Pas dans mon jardin",
+      "texte": "Chasser 500 nuisibles en tout"
+    }
+  ],
+  "records": [
+    {
+      "id": "niveau",
+      "nom": "Plus haut niveau réussi",
+      "sens": "haut",
+      "format": "nombre"
+    }
   ]
 }
